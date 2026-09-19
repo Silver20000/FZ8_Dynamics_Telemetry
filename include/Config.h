@@ -7,24 +7,26 @@
 // HARDWARE PIN CONFIGURATION (ESP32-C3 Mini / Super Mini)
 // ==============================================================================
 
-// I2C Bus Pins (GY-89: LSM303D + L3GD20 + BMP180)
-#define I2C_SDA_PIN         4
-#define I2C_SCL_PIN         5
+// GY-89 10-DOF Module Pins (Specific custom mapping)
+#define I2C_SCL_PIN         4       // SCL -> GPIO 4
+#define I2C_SDA_PIN         3       // SDA -> GPIO 3
+#define GY89_SA0_PIN        2       // SDO / SA0 -> GPIO 2 (Address select)
+#define GY89_CS1_PIN        1       // CS1 -> GPIO 1 (LSM303D I2C enable)
+#define GY89_CS2_PIN        0       // CS2 -> GPIO 0 (L3GD20 I2C enable)
+
 #define I2C_FREQ_HZ         400000  // 400 kHz Fast-Mode for low-latency (<1.5ms)
 
 // SPI Bus & Display Pins (SSD1283A 1.6" Transflective LCD 130x130)
-#define LCD_SCK_PIN         6       // SPI Clock
-#define LCD_MOSI_PIN        7       // SPI MOSI (SDA on display board)
-#define LCD_CS_PIN          10      // Chip Select
-#define LCD_DC_PIN          2       // Data / Command (A0)
-#define LCD_RST_PIN         3       // Reset
-#define LCD_LED_PIN         1       // Backlight PWM / Control (-1 if tied to 3.3V)
+#define LCD_DC_PIN          5       // Data / Command (A0) -> GPIO 5
+#define LCD_SCK_PIN         6       // SPI Clock -> GPIO 6
+#define LCD_MOSI_PIN        7       // SPI MOSI (SDA on display) -> GPIO 7
+#define LCD_CS_PIN          10      // Chip Select -> GPIO 10
+#define LCD_RST_PIN         20      // Display Reset -> GPIO 20
+#define LCD_LED_PIN         21      // Display Backlight (PWM / High) -> GPIO 21
 
-// User Interface / Button Pins
-// Primary button: GPIO 9 (Built-in BOOT button on ESP32-C3 Super Mini, active LOW)
-// Note: GPIO 0 is a strapping pin (requires 10k pullup, HIGH at boot)
-#define BUTTON_PIN          9       // Onboard button (active LOW, internal pull-up)
-#define STATUS_LED_PIN      8       // Onboard status LED (active LOW on most C3 mini boards)
+// User Interface / Status Pins
+#define BUTTON_PIN          9       // Onboard BOOT button (active LOW, internal pull-up)
+#define STATUS_LED_PIN      8       // Onboard status LED (active LOW)
 
 // ==============================================================================
 // MOTORCYCLE DYNAMICS & FILTER PARAMETERS
@@ -33,8 +35,6 @@
 #define IMU_SAMPLE_PERIOD_MS    (1000 / IMU_SAMPLE_FREQ_HZ)
 
 // Straight & Upright Detection Gates (Disables Accel roll correction during cornering)
-// A motorcycle in a coordinated turn has apparent gravity vector along Z axis (pedane),
-// so accelerometer roll measurement is deceptive during cornering.
 #define GATE_TOTAL_G_MIN        0.92f   // Total G lower bound for straight motion (g)
 #define GATE_TOTAL_G_MAX        1.08f   // Total G upper bound for straight motion (g)
 #define GATE_YAW_RATE_MAX       3.0f    // Max yaw rate (|wz|) for straight motion (deg/s)

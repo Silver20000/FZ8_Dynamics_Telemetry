@@ -13,22 +13,34 @@ Un computer di bordo dedicato all'analisi della dinamica motociclistica per **Ya
 
 ## 1. Schema di Cablaggio (Pinout ESP32-C3)
 
-| Dispositivo | Pin Modulo | Pin ESP32-C3 | Note e Funzione |
-|---|---|---|---|
-| **GY-89** | VCC | **3.3V** (o 5V) | Alimentazione (il GY-89 integra regolatore LDO) |
-| **GY-89** | GND | **GND** | Massa comune |
-| **GY-89** | SCL | **GPIO 5** | Bus I2C Clock (400 kHz Fast-Mode) |
-| **GY-89** | SDA | **GPIO 4** | Bus I2C Data |
-| **LCD 1.6"** | VCC | **3.3V** | Alimentazione logica |
-| **LCD 1.6"** | GND | **GND** | Massa comune |
-| **LCD 1.6"** | CS | **GPIO 10** | SPI Chip Select |
-| **LCD 1.6"** | RST | **GPIO 3** | Display Reset |
-| **LCD 1.6"** | A0 / DC | **GPIO 2** | Data / Command |
-| **LCD 1.6"** | SDA / MOSI | **GPIO 7** | SPI Master Out Slave In |
-| **LCD 1.6"** | SCK / SCLK | **GPIO 6** | SPI Clock |
-| **LCD 1.6"** | LED / BL | **GPIO 1** (o 3.3V) | Retroilluminazione display |
-| **Pulsante** | Switch | **GPIO 9** | Pulsante BOOT integrato a bordo (o esterno a massa) |
-| **LED Stato** | LED onboard | **GPIO 8** | Indicatore di stato e modalità Wi-Fi |
+### Modulo GY-89 (10-DOF IMU)
+| Pin Modulo GY-89 | Pin ESP32-C3 | Funzione / Descrizione |
+|---|---|---|
+| **VCC** | **3.3V** (o 5V) | Alimentazione (il GY-89 integra regolatore LDO) |
+| **GND** | **GND** | Massa comune |
+| **SCL** | **GPIO 4** | Bus I2C Clock (400 kHz Fast-Mode) |
+| **SDA** | **GPIO 3** | Bus I2C Data |
+| **SDO / SA0** | **GPIO 2** | Indirizzo I2C (pilotato ad ALTO: LSM303D=0x1E, L3GD20=0x6B) |
+| **CS1** | **GPIO 1** | Chip Select 1 (pilotato ad ALTO per forzare LSM303D in modo I2C) |
+| **CS2** | **GPIO 0** | Chip Select 2 (pilotato ad ALTO per forzare L3GD20 in modo I2C) |
+
+### Display LCD 1.6" SPI 130x130 (SSD1283A)
+| Pin Display | Pin ESP32-C3 | Funzione / Descrizione |
+|---|---|---|
+| **VCC** | **3.3V** | Alimentazione logica |
+| **GND** | **GND** | Massa comune |
+| **A0 / DC** | **GPIO 5** | Data / Command |
+| **SCK / SCLK** | **GPIO 6** | SPI Hardware Clock |
+| **SDA / MOSI** | **GPIO 7** | SPI Hardware Data Out |
+| **CS** | **GPIO 10** | SPI Chip Select |
+| **RST** | **GPIO 20** | Reset display |
+| **LED / BL** | **GPIO 21** (o 3.3V) | Retroilluminazione display (o controllo PWM) |
+
+### Controlli & Stato
+| Componente | Pin ESP32-C3 | Funzione |
+|---|---|---|
+| **Pulsante** | **GPIO 9** | Tasto BOOT integrato a bordo (o pulsante esterno a massa) |
+| **LED Stato** | **GPIO 8** | Indicatore di stato e modalità Wi-Fi |
 
 > [!WARNING]
 > **Attenzione a GPIO 0**: GPIO 0 è uno *strapping pin* sull'ESP32-C3 e deve essere a livello logico ALTO all'avvio per caricare il firmware da Flash (se tenuto a massa all'accensione entra in bootloader UART). Per questo motivo il firmware usa di default **GPIO 9** (che ha già pull-up interno ed è il tasto BOOT della scheda).

@@ -49,15 +49,31 @@ public:
         _baroState(0), _baroTimer(0), _hasBMP(false) {}
 
     bool begin() {
+        // Drive GY-89 control pins:
+        // CS1 (GPIO 1) & CS2 (GPIO 0) HIGH force LSM303D and L3GD20 into I2C mode
+        // SA0 (GPIO 2) HIGH sets slave address to 0x1E (LSM) and 0x6B (L3G)
+        pinMode(GY89_CS1_PIN, OUTPUT);
+        digitalWrite(GY89_CS1_PIN, HIGH);
+
+        pinMode(GY89_CS2_PIN, OUTPUT);
+        digitalWrite(GY89_CS2_PIN, HIGH);
+
+        pinMode(GY89_SA0_PIN, OUTPUT);
+        digitalWrite(GY89_SA0_PIN, HIGH);
+
+        delay(10);
+
         Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
         Wire.setClock(I2C_FREQ_HZ);
 
         delay(50);
 
         // 1. Detect & Initialize LSM303D (Accelerometer)
+        // With SA0=HIGH, default address is 0x1E
+        _lsmAddr = 0x1E;
         if (!initLSM303D()) {
-            Serial.println("[IMU] LSM303D not found at 0x1D, trying 0x1E...");
-            _lsmAddr = 0x1E;
+            Serial.println("[IMU] LSM303D not found at 0x1E, checking 0x1D...");
+            _lsmAddr = 0x1D;
             if (!initLSM303D()) {
                 Serial.println("[IMU] ERROR: LSM303D failed to initialize!");
                 return false;
