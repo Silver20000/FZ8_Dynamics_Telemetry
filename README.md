@@ -18,32 +18,36 @@ Un computer di bordo dedicato all'analisi della dinamica motociclistica per **Ya
 |---|---|---|
 | **VCC** | **3.3V** (o 5V) | Alimentazione (il GY-89 integra regolatore LDO) |
 | **GND** | **GND** | Massa comune |
-| **SCL** | **GPIO 4** | Bus I2C Clock (400 kHz Fast-Mode) |
-| **SDA** | **GPIO 3** | Bus I2C Data |
-| **SDO / SA0** | **GPIO 2** | Indirizzo I2C (pilotato ad ALTO: LSM303D=0x1E, L3GD20=0x6B) |
-| **CS1** | **GPIO 1** | Chip Select 1 (pilotato ad ALTO per forzare LSM303D in modo I2C) |
 | **CS2** | **GPIO 0** | Chip Select 2 (pilotato ad ALTO per forzare L3GD20 in modo I2C) |
+| **CS1** | **GPIO 1** | Chip Select 1 (pilotato ad ALTO per forzare LSM303D in modo I2C) |
+| **SDO / SA0** | **GPIO 2** | Indirizzo I2C (pilotato ad ALTO: LSM303D=0x1E, L3GD20=0x6B) |
+| **SDA** | **GPIO 3** | Bus I2C Data |
+| **SCL** | **GPIO 4** | Bus I2C Clock (400 kHz Fast-Mode) |
 
 ### Display LCD 1.6" SPI 130x130 (SSD1283A)
 | Pin Display | Pin ESP32-C3 | Funzione / Descrizione |
 |---|---|---|
 | **VCC** | **3.3V** | Alimentazione logica |
 | **GND** | **GND** | Massa comune |
-| **A0 / DC** | **GPIO 5** | Data / Command |
-| **SCK / SCLK** | **GPIO 6** | SPI Hardware Clock |
-| **SDA / MOSI** | **GPIO 7** | SPI Hardware Data Out |
-| **CS** | **GPIO 10** | SPI Chip Select |
-| **RST** | **GPIO 20** | Reset display |
-| **LED / BL** | **GPIO 21** (o 3.3V) | Retroilluminazione display (o controllo PWM) |
+| **CS** | **GPIO 5** | SPI Chip Select |
+| **RESET / RST** | **GPIO 6** | Reset display |
+| **A0 / DC** | **GPIO 7** | Data / Command |
+| **SDA / MOSI** | **GPIO 8** | SPI Hardware Data Out |
+| **SCK / SCLK** | **GPIO 9** | SPI Hardware Clock |
+| **LED / BL** | **GPIO 10** | Retroilluminazione display (pilotata ad ALTO / PWM) |
 
 ### Controlli & Stato
 | Componente | Pin ESP32-C3 | Funzione |
 |---|---|---|
-| **Pulsante** | **GPIO 9** | Tasto BOOT integrato a bordo (o pulsante esterno a massa) |
-| **LED Stato** | **GPIO 8** | Indicatore di stato e modalità Wi-Fi |
+| **Pulsante Utente** | **GPIO 20** | Tasto funzioni a manubrio/cruscotto (a massa, pull-up interno) |
+| **LED Stato** | **GPIO 21** | Indicatore di stato / modalità Wi-Fi (opzionale) |
 
-> [!WARNING]
-> **Attenzione a GPIO 0**: GPIO 0 è uno *strapping pin* sull'ESP32-C3 e deve essere a livello logico ALTO all'avvio per caricare il firmware da Flash (se tenuto a massa all'accensione entra in bootloader UART). Per questo motivo il firmware usa di default **GPIO 9** (che ha già pull-up interno ed è il tasto BOOT della scheda).
+> [!NOTE]
+> **Mappatura Pin Consecutiva 0-10:**
+> Con questa configurazione tutti i collegamenti sono perfettamente continui e ordinati sul pinout dell'ESP32-C3:
+> - **GPIO 0 .. 4**: Sensore 10-DOF GY-89 (CS2, CS1, SA0, SDA, SCL)
+> - **GPIO 5 .. 10**: Display LCD 1.6" SSD1283A (CS, RST, DC, SDA, SCK, LED)
+> - **GPIO 20 .. 21**: Pulsante utente multifunzione e LED di stato
 
 ---
 

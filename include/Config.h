@@ -7,26 +7,26 @@
 // HARDWARE PIN CONFIGURATION (ESP32-C3 Mini / Super Mini)
 // ==============================================================================
 
-// GY-89 10-DOF Module Pins (Specific custom mapping)
-#define I2C_SCL_PIN         4       // SCL -> GPIO 4
-#define I2C_SDA_PIN         3       // SDA -> GPIO 3
-#define GY89_SA0_PIN        2       // SDO / SA0 -> GPIO 2 (Address select)
-#define GY89_CS1_PIN        1       // CS1 -> GPIO 1 (LSM303D I2C enable)
+// GY-89 10-DOF Module Pins
 #define GY89_CS2_PIN        0       // CS2 -> GPIO 0 (L3GD20 I2C enable)
+#define GY89_CS1_PIN        1       // CS1 -> GPIO 1 (LSM303D I2C enable)
+#define GY89_SA0_PIN        2       // SDO / SA0 -> GPIO 2 (Address select)
+#define I2C_SDA_PIN         3       // SDA -> GPIO 3 (I2C Data)
+#define I2C_SCL_PIN         4       // SCL -> GPIO 4 (I2C Clock)
 
 #define I2C_FREQ_HZ         400000  // 400 kHz Fast-Mode for low-latency (<1.5ms)
 
 // SPI Bus & Display Pins (SSD1283A 1.6" Transflective LCD 130x130)
-#define LCD_DC_PIN          5       // Data / Command (A0) -> GPIO 5
-#define LCD_SCK_PIN         6       // SPI Clock -> GPIO 6
-#define LCD_MOSI_PIN        7       // SPI MOSI (SDA on display) -> GPIO 7
-#define LCD_CS_PIN          10      // Chip Select -> GPIO 10
-#define LCD_RST_PIN         20      // Display Reset -> GPIO 20
-#define LCD_LED_PIN         21      // Display Backlight (PWM / High) -> GPIO 21
+#define LCD_CS_PIN          5       // CS -> GPIO 5
+#define LCD_RST_PIN         6       // Reset -> GPIO 6
+#define LCD_DC_PIN          7       // A0 / DC -> GPIO 7
+#define LCD_MOSI_PIN        8       // SDA / MOSI -> GPIO 8
+#define LCD_SCK_PIN         9       // SCK -> GPIO 9
+#define LCD_LED_PIN         10      // LED / Backlight -> GPIO 10
 
-// User Interface / Status Pins
-#define BUTTON_PIN          9       // Onboard BOOT button (active LOW, internal pull-up)
-#define STATUS_LED_PIN      8       // Onboard status LED (active LOW)
+// User Interface / Status Pins (GPIO 20 and 21)
+#define BUTTON_PIN          20      // User button (active LOW, internal pull-up) -> GPIO 20
+#define STATUS_LED_PIN      21      // Status LED (active LOW / optional) -> GPIO 21
 
 // ==============================================================================
 // MOTORCYCLE DYNAMICS & FILTER PARAMETERS
