@@ -103,16 +103,31 @@ public:
         }
     }
 
-    void showTareNotice() {
-        _lcd.fillRect(15, 45, 100, 40, COLOR_AMBER);
-        _lcd.drawRect(14, 44, 102, 42, COLOR_WHITE);
+    void showTareNotice(float rollOffset = 0.0f, float pitchOffset = 0.0f) {
+        _lcd.fillRect(10, 36, 110, 58, COLOR_AMBER);
+        _lcd.drawRect(9, 35, 112, 60, COLOR_WHITE);
         _lcd.setTextColor(COLOR_BLACK);
         _lcd.setTextSize(1);
-        _lcd.setCursor(26, 52);
+        _lcd.setCursor(24, 42);
         _lcd.print("ZERO TARE");
-        _lcd.setCursor(22, 68);
-        _lcd.print("CALIBRATED!");
-        delay(900);
+        _lcd.setCursor(16, 56);
+        _lcd.print("CALIBRATO OK!");
+        _lcd.setCursor(14, 72);
+        _lcd.printf("R:%+.1f P:%+.1f", rollOffset, pitchOffset);
+        delay(1200);
+        _needsFullRedraw = true;
+    }
+
+    void showTareResetNotice() {
+        _lcd.fillRect(10, 40, 110, 50, COLOR_DARK_GRAY);
+        _lcd.drawRect(9, 39, 112, 52, COLOR_WHITE);
+        _lcd.setTextColor(COLOR_WHITE);
+        _lcd.setTextSize(1);
+        _lcd.setCursor(24, 48);
+        _lcd.print("ZERO RESET");
+        _lcd.setCursor(16, 64);
+        _lcd.print("DEFAULT FABBRICA");
+        delay(1000);
         _needsFullRedraw = true;
     }
 

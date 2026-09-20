@@ -2,6 +2,7 @@
 #define MOTORCYCLE_FILTER_H
 
 #include <Arduino.h>
+#include <Preferences.h>
 #include "Config.h"
 #include "SensorsGY89.h"
 
@@ -53,11 +54,19 @@ class MotorcycleFilter {
 public:
     MotorcycleFilter() :
         _roll(0.0f), _pitch(0.0f),
-        _tareOffset(0.0f),
+        _tareRoll(0.0f), _tarePitch(0.0f),
         _straightCycles(0),
         _lastUpdateMicros(0),
         _firstRun(true) {
         resetRecords();
+    }
+
+    void begin() {
+        _prefs.begin("fz8_cal", false);
+        _tareRoll = _prefs.getFloat("tareRoll", MANUAL_ROLL_OFFSET_DEG);
+        _tarePitch = _prefs.getFloat("tarePitch", MANUAL_PITCH_OFFSET_DEG);
+        _prefs.end();
+        Serial.printf("[FILTER] Zero Tare Loaded: RollOffset=%.2f deg, PitchOffset=%.2f deg\n", _tareRoll, _tarePitch);
     }
 
     void resetRecords() {
@@ -71,10 +80,28 @@ public:
     }
 
     void tareZero() {
-        // Set current roll as mechanical zero reference (e.g. on paddock stand or rider level)
-        _tareOffset = _roll;
-        _roll = 0.0f;
+        // Set current roll and pitch as mechanical mounting zero reference
+        _tareRoll = _roll;
+        _tarePitch = _pitch;
+        _prefs.begin("fz8_cal", false);
+        _prefs.putFloat("tareRoll", _tareRoll);
+        _prefs.putFloat("tarePitch", _tarePitch);
+        _prefs.end();
+        Serial.printf("[FILTER] Zero Tare Saved: RollOffset=%.2f deg, PitchOffset=%.2f deg\n", _tareRoll, _tarePitch);
     }
+
+    void resetTare() {
+        _tareRoll = 0.0f;
+        _tarePitch = 0.0f;
+        _prefs.begin("fz8_cal", false);
+        _prefs.remove("tareRoll");
+        _prefs.remove("tarePitch");
+        _prefs.end();
+        Serial.println("[FILTER] Zero Tare Reset to factory default (0.0 deg).");
+    }
+
+    float getTareRoll() const { return _tareRoll; }
+    float getTarePitch() const { return _tarePitch; }
 
     void update(const IMURawData& raw, MotorcycleDynamics& outDynamics) {
         uint32_t nowMicros = micros();
@@ -92,72 +119,114 @@ public:
         _lastUpdateMicros = nowMicros;
         if (dt <= 0.0f || dt > 0.1f) dt = 0.01f; // Clamp anomalous dt
 
-        // 1. Calculate Acceleration Vector Magnitude
+        // 0. Axis Mapping & 90-degree Rotation
+#if IMU_SWAP_XY
+        // Rotate coordinate frame by 90 degrees so acceleration and lean are perpendicular:
+        float ax = raw.ay;
+        float ay = -raw.ax;
+        float az = raw.az;
+        float gx = -raw.gy;
+        float gy = raw.gx;
+        float gz = raw.gz;
+#else
         float ax = raw.ax;
         float ay = raw.ay;
         float az = raw.az;
+        float gx = raw.gx;
+        float gy = raw.gy;
+        float gz = raw.gz;
+#endif
+
+#if IMU_INVERT_ROLL
+        gx = -gx;
+        ay = -ay;
+#endif
+#if IMU_INVERT_ACCEL
+        ax = -ax;
+        gy = -gy;
+#endif
+
+        // 1. Calculate Acceleration Vector Magnitude
         float totalG = sqrtf(ax * ax + ay * ay + az * az);
 
-        // 2. Gyro Rates
-        float gx = raw.gx; // Roll rate (deg/s)
-        float gy = raw.gy; // Pitch rate (deg/s)
-        float gz = raw.gz; // Yaw rate (deg/s)
+        // 2. Direct Accelerometer Tilt Angles
+        float accelRoll = atan2f(ay, az) * (180.0f / (float)M_PI);
+        float accelPitch = atan2f(-ax, sqrtf(ay * ay + az * az)) * (180.0f / (float)M_PI);
 
-        // 3. Continuous Gyro Integration for Roll & Pitch
-        _roll += gx * dt;
-        _pitch += gy * dt;
+        // 3. Stationary Detection (Auto-lock to gravity when still -> ELIMINATES DRIFT)
+        bool isStationary = (fabsf(gx) < 2.5f && fabsf(gy) < 2.5f && fabsf(gz) < 2.5f && 
+                             fabsf(totalG - 1.0f) < 0.18f);
 
-        // 4. Motorcycle Kinematic Gate Check
-        // A motorcycle in a turn has elevated total G (centripetal + gravity),
-        // significant yaw rate (|gz| > 3 deg/s), or transient roll rate.
-        bool isStraightG = (totalG >= GATE_TOTAL_G_MIN && totalG <= GATE_TOTAL_G_MAX);
-        bool isLowYaw    = (fabsf(gz) < GATE_YAW_RATE_MAX);
-        bool isLowRoll   = (fabsf(gx) < GATE_ROLL_RATE_MAX);
-        bool isLowLat    = (fabsf(ay) < GATE_LATERAL_G_MAX);
+        // 4. Dynamic Motorcycle Cornering Detection (Centripetal load + Yaw rate)
+        bool isCornering = (fabsf(gz) > 4.0f && totalG > 1.10f);
 
-        bool isSteadyStraight = isStraightG && isLowYaw && isLowRoll && isLowLat;
-
-        if (isSteadyStraight) {
-            _straightCycles++;
-            // Require sustained straight movement before allowing accelerometer drift correction
-            const uint16_t REQUIRED_CYCLES = (STRAIGHT_TIME_CONFIRM_MS / IMU_SAMPLE_PERIOD_MS);
-            if (_straightCycles >= REQUIRED_CYCLES) {
-                // Safe to apply gentle accelerometer gravity correction
-                float accelRoll = atan2f(ay, az) * (180.0f / (float)M_PI);
-                float accelPitch = atan2f(-ax, sqrtf(ay * ay + az * az)) * (180.0f / (float)M_PI);
-
-                // Gentle complementary alpha (99.8% gyro, 0.2% accel)
-                _roll = 0.998f * _roll + 0.002f * accelRoll;
-                _pitch = 0.995f * _pitch + 0.005f * accelPitch;
-
-                _dynamics.isCornering = false;
-            }
+        // 5. Adaptive Complementary Weight
+        float alpha;
+        if (isStationary) {
+            // Firmly lock to gravity when still -> ZERO RUNAWAY DRIFT!
+            alpha = 0.85f;
+            _dynamics.isCornering = false;
+        } else if (isCornering) {
+            // High-G curve: rely heavily on gyro integration (prevent curve pull-down)
+            alpha = 0.9992f;
+            _dynamics.isCornering = true;
         } else {
-            _straightCycles = 0;
-            // CRITICAL MOTORCYCLE LOGIC:
-            // Disconnect accelerometer roll correction completely during cornering!
-            // Gyro integration maintains pure, uncorrupted roll angle through the bend.
-            if (fabsf(gz) > GATE_YAW_RATE_MAX || totalG > GATE_TOTAL_G_MAX || fabsf(_roll - _tareOffset) > 5.0f) {
-                _dynamics.isCornering = true;
-            }
+            // Normal straight riding or transitions
+            alpha = 0.985f;
+            _dynamics.isCornering = false;
         }
 
-        // Apply Tare Offset
-        float effectiveRoll = _roll - _tareOffset;
+        // Integration + Complementary Correction
+        _roll = alpha * (_roll + gx * dt) + (1.0f - alpha) * accelRoll;
+        _pitch = 0.98f * (_pitch + gy * dt) + 0.02f * accelPitch;
 
-        // 5. Dynamics State & G-Forces
+        // Apply Tare Offset (Motorcycle body frame)
+        float effectiveRoll = _roll - _tareRoll;
+        float effectivePitch = _pitch - _tarePitch;
+
+        // 5. Dynamics State & Gravity-Compensated Dynamic G-Forces
         _dynamics.rollDeg = effectiveRoll;
-        _dynamics.pitchDeg = _pitch;
+        _dynamics.pitchDeg = effectivePitch;
         _dynamics.rollRateDps = gx;
         _dynamics.yawRateDps = gz;
 
-        _dynamics.gLongitudinal = ax; // Forward accel / braking
-        _dynamics.gLateral = ay;
-        _dynamics.gVertical = az;
+        // Rotate sensor acceleration (ax, ay, az) by (-tarePitch, -tareRoll) into motorcycle chassis frame:
+        float tarePitchRad = _tarePitch * ((float)M_PI / 180.0f);
+        float tareRollRad = _tareRoll * ((float)M_PI / 180.0f);
+
+        float cp = cosf(tarePitchRad);
+        float sp = sinf(tarePitchRad);
+        float cr = cosf(tareRollRad);
+        float sr = sinf(tareRollRad);
+
+        // Rotation around Y (pitch compensation)
+        float ax1 = ax * cp + az * sp;
+        float az1 = -ax * sp + az * cp;
+
+        // Rotation around X (roll compensation)
+        float ay_moto = ay * cr - az1 * sr;
+        float az_moto = ay * sr + az1 * cr;
+        float ax_moto = ax1;
+
+        // Motorcycle body gravity vector projection:
+        float motoPitchRad = effectivePitch * ((float)M_PI / 180.0f);
+        float motoRollRad = effectiveRoll * ((float)M_PI / 180.0f);
+
+        float gravX = -sinf(motoPitchRad);
+        float gravY = cosf(motoPitchRad) * sinf(motoRollRad);
+
+        // TRUE Dynamic G-Forces: subtract static 1G gravity tilt
+        // Tilting the bike in roll/pitch will NOT falsely produce longitudinal/lateral G!
+        float dynLongitudinal = ax_moto - gravX; // Pure forward acceleration / braking
+        float dynLateral = ay_moto - gravY;      // Pure cornering G
+
+        _dynamics.gLongitudinal = dynLongitudinal;
+        _dynamics.gLateral = dynLateral;
+        _dynamics.gVertical = az_moto;
         _dynamics.totalG = totalG;
 
-        _dynamics.isBraking = (ax < -0.25f);
-        _dynamics.isAccelerating = (ax > 0.20f);
+        _dynamics.isBraking = (dynLongitudinal < -0.25f);
+        _dynamics.isAccelerating = (dynLongitudinal > 0.20f);
 
         // 6. Record Peak Lean Angles (Left vs Right)
         if (effectiveRoll < -0.5f) {
@@ -171,12 +240,12 @@ public:
             }
         }
 
-        // 7. Record Peak Longitudinal Gs
-        if (ax < -_dynamics.maxBrakingG) {
-            _dynamics.maxBrakingG = fabsf(ax);
+        // 7. Record Peak Longitudinal Dynamic Gs
+        if (dynLongitudinal < -_dynamics.maxBrakingG) {
+            _dynamics.maxBrakingG = fabsf(dynLongitudinal);
         }
-        if (ax > _dynamics.maxAccelG) {
-            _dynamics.maxAccelG = ax;
+        if (dynLongitudinal > _dynamics.maxAccelG) {
+            _dynamics.maxAccelG = dynLongitudinal;
         }
 
         // 8. Environmental / Barometer updates
@@ -191,9 +260,11 @@ public:
     }
 
 private:
+    Preferences _prefs;
     float _roll;
     float _pitch;
-    float _tareOffset;
+    float _tareRoll;
+    float _tarePitch;
     uint16_t _straightCycles;
     uint32_t _lastUpdateMicros;
     bool _firstRun;

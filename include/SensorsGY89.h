@@ -65,6 +65,7 @@ public:
 
         Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
         Wire.setClock(I2C_FREQ_HZ);
+        Wire.setTimeOut(30); // 30ms timeout to prevent hanging on bus error
 
         delay(50);
 

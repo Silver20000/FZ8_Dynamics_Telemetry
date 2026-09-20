@@ -63,6 +63,7 @@ static const char PROGMEM DASHBOARD_HTML[] = R"rawliteral(
     <div class="label">Angolo di Piega Istantaneo</div>
     <div id="liveRoll" class="val" style="font-size: 42px;">0.0&deg;</div>
     <div id="leanDir" style="color: #8b949e; font-size: 14px; margin-top: 4px;">DRITTA</div>
+    <div id="tareInfo" style="color: #8b949e; font-size: 11px; margin-top: 6px;">Tara Montaggio: R: +0.0&deg; | P: +0.0&deg;</div>
   </div>
 
   <div class="card">
@@ -96,8 +97,11 @@ static const char PROGMEM DASHBOARD_HTML[] = R"rawliteral(
   </div>
 </div>
 
+<div class="actions" style="margin-bottom: 8px;">
+  <button onclick="sendAction('/api/tare')" style="background: #238636; border-color: #2ea043;">🎯 Salva Posizione come Zero (Tara)</button>
+</div>
 <div class="actions">
-  <button onclick="sendAction('/api/tare')">Azzera Tara (Zero)</button>
+  <button onclick="sendAction('/api/resettare')">↺ Reset Zero Fabbrica</button>
   <button class="danger" onclick="sendAction('/api/reset')">Azzera Record</button>
 </div>
 
@@ -117,6 +121,10 @@ function fetchTelemetry() {
       } else {
         document.getElementById('leanDir').innerHTML = 'DRITTA';
         document.getElementById('liveRoll').style.color = '#fff';
+      }
+
+      if (d.tR !== undefined) {
+        document.getElementById('tareInfo').innerHTML = 'Tara Montaggio: R: ' + (d.tR >= 0 ? '+' : '') + d.tR.toFixed(1) + '&deg; | P: ' + (d.tP >= 0 ? '+' : '') + d.tP.toFixed(1) + '&deg;';
       }
 
       document.getElementById('maxLeft').innerHTML = d.maxL.toFixed(1) + '&deg;';
@@ -163,19 +171,26 @@ public:
                 _server.send(500, "application/json", "{}");
                 return;
             }
-            char json[256];
+            char json[280];
             snprintf(json, sizeof(json), 
-                "{\"roll\":%.1f,\"pitch\":%.1f,\"maxL\":%.1f,\"maxR\":%.1f,\"maxBrake\":%.2f,\"maxAccel\":%.2f,\"gLon\":%.2f,\"gLat\":%.2f,\"alt\":%.1f,\"temp\":%.1f}",
+                "{\"roll\":%.1f,\"pitch\":%.1f,\"maxL\":%.1f,\"maxR\":%.1f,\"maxBrake\":%.2f,\"maxAccel\":%.2f,\"gLon\":%.2f,\"gLat\":%.2f,\"alt\":%.1f,\"temp\":%.1f,\"tR\":%.1f,\"tP\":%.1f}",
                 _dynPtr->rollDeg, _dynPtr->pitchDeg,
                 _dynPtr->maxLeanLeft, _dynPtr->maxLeanRight,
                 _dynPtr->maxBrakingG, _dynPtr->maxAccelG,
                 _dynPtr->gLongitudinal, _dynPtr->gLateral,
-                _dynPtr->altitudeM, _dynPtr->tempC);
+                _dynPtr->altitudeM, _dynPtr->tempC,
+                _filter ? _filter->getTareRoll() : 0.0f,
+                _filter ? _filter->getTarePitch() : 0.0f);
             _server.send(200, "application/json", json);
         });
 
         _server.on("/api/tare", HTTP_POST, [this]() {
             if (_filter) _filter->tareZero();
+            _server.send(200, "text/plain", "OK");
+        });
+
+        _server.on("/api/resettare", HTTP_POST, [this]() {
+            if (_filter) _filter->resetTare();
             _server.send(200, "text/plain", "OK");
         });
 

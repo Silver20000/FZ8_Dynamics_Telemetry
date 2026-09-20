@@ -60,7 +60,7 @@ void handleButton() {
             if (duration >= 800 && duration < 2500) {
                 // Medium Press: Zero Tare
                 motoFilter.tareZero();
-                uiDisplay.showTareNotice();
+                uiDisplay.showTareNotice(motoFilter.getTareRoll(), motoFilter.getTarePitch());
             } else if (duration >= 50 && duration < 800) {
                 // Short Click: Next Screen
                 uiDisplay.nextScreen();
@@ -96,6 +96,9 @@ void setup() {
     } else {
         Serial.println("[SYSTEM] IMU Sensors ready and calibrated.");
     }
+
+    // 3. Initialize Dynamics Filter & Load Stored Zero Tare from Flash NVS
+    motoFilter.begin();
 
     lastImuMicros = micros();
     lastDisplayMillis = millis();

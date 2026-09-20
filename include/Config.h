@@ -29,6 +29,18 @@
 #define STATUS_LED_PIN      21      // Status LED (active LOW / optional) -> GPIO 21
 
 // ==============================================================================
+// IMU SENSOR AXIS ORIENTATION
+// ==============================================================================
+// Imposta a true per ruotare di 90 gradi l'orientamento tra accelerazione e piega
+#define IMU_SWAP_XY             true    // Scambia assi X e Y (rende accelerazione e piega perpendicolari)
+#define IMU_INVERT_ROLL         false   // Inverte il verso della piega (Destra/Sinistra) se necessario
+#define IMU_INVERT_ACCEL        false   // Inverte il verso dell'accelerazione (ACC/BRK) se necessario
+
+// Offset manuali di montaggio (se si desidera impostare un valore fisso da codice anziche salvare via Tare)
+#define MANUAL_ROLL_OFFSET_DEG   0.0f   // Inclinazione laterale a riposo (gradi)
+#define MANUAL_PITCH_OFFSET_DEG  0.0f   // Inclinazione beccheggio/frontale a riposo (gradi)
+
+// ==============================================================================
 // MOTORCYCLE DYNAMICS & FILTER PARAMETERS
 // ==============================================================================
 #define IMU_SAMPLE_FREQ_HZ      100     // 100 Hz loop for IMU (10ms dt)
