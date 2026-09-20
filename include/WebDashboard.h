@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiMulti.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <Preferences.h>
@@ -354,20 +355,29 @@ public:
         _homePass = _prefs.getString("homePass", DEFAULT_HOME_PASS);
         _prefs.end();
 
-        // 2. Avvia Wi-Fi in Modalità Doppia (AP + STA)
+        // 2. Avvia Wi-Fi in Modalita Doppia (AP Aperto + STA)
         WiFi.mode(WIFI_AP_STA);
-        WiFi.softAP(AP_SSID, AP_PASSWORD);
+        if (strlen(AP_PASSWORD) == 0) {
+            WiFi.softAP(AP_SSID); // Rete APERTA senza alcuna password!
+            Serial.printf("[WIFI] SoftAP APERTO Avviato: SSID='%s' (Nessuna Password), IP=%s\n", 
+                          AP_SSID, WiFi.softAPIP().toString().c_str());
+        } else {
+            WiFi.softAP(AP_SSID, AP_PASSWORD);
+            Serial.printf("[WIFI] SoftAP Avviato: SSID='%s', Pass='%s', IP=%s\n", 
+                          AP_SSID, AP_PASSWORD, WiFi.softAPIP().toString().c_str());
+        }
         delay(100);
 
-        IPAddress apIp = WiFi.softAPIP();
-        Serial.printf("[WIFI] SoftAP Avviato: SSID='%s', Pass='%s', IP=%s\n", 
-                      AP_SSID, AP_PASSWORD, apIp.toString().c_str());
-
-        // Connetti a rete di casa se configurata
-        if (_homeSsid.length() > 0) {
-            Serial.printf("[WIFI] Connessione a rete di casa '%s'...\n", _homeSsid.c_str());
-            WiFi.begin(_homeSsid.c_str(), _homePass.c_str());
+        // Aggiungi le reti note a WiFiMulti (Silvestrini 2.4g e Silver)
+        _wifiMulti.addAP("Silvestrini 2.4g", "11042025");
+        _wifiMulti.addAP("Silvestrini 2.4g", "silver11");
+        _wifiMulti.addAP("Silvestrini 2.4g", "Silver11");
+        _wifiMulti.addAP("Silver", "silver11");
+        _wifiMulti.addAP("Silver", "Silver11");
+        if (_homeSsid.length() > 0 && _homeSsid != "Silvestrini 2.4g" && _homeSsid != "Silver") {
+            _wifiMulti.addAP(_homeSsid.c_str(), _homePass.c_str());
         }
+        _wifiMulti.run();
 
         // 3. Avvia mDNS responder (http://fz8.local)
         if (MDNS.begin(MDNS_HOSTNAME)) {
@@ -510,12 +520,14 @@ public:
 
     void handleClient() {
         if (_active) {
+            _wifiMulti.run();
             _server.handleClient();
         }
     }
 
 private:
     WebServer _server;
+    WiFiMulti _wifiMulti;
     Preferences _prefs;
     bool _active;
     String _homeSsid;

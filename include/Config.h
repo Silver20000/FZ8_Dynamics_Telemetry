@@ -61,13 +61,13 @@
 // Barometer (BMP180) Poll Interval
 #define BARO_POLL_INTERVAL_MS   500     // 2 Hz altitude/temp query (non-blocking)
 
-// Wi-Fi Configuration (Modalita Doppia: Hotspot + Rete di Casa)
+// Wi-Fi Configuration (Modalita Doppia: Hotspot Aperto + Rete di Casa)
 #define AP_SSID                 "FZ8-Telemetry"
-#define AP_PASSWORD             "yamahafz8"
+#define AP_PASSWORD             ""      // Aperto (senza password per connessione istantanea)
 #define AP_IP_ADDR              "192.168.4.1"
 
-#define DEFAULT_HOME_SSID       ""      // Inserisci qui l'SSID del Wi-Fi di casa o configuralo da web
-#define DEFAULT_HOME_PASS       ""      // Inserisci qui la password del Wi-Fi di casa o configurala da web
+#define DEFAULT_HOME_SSID       "Silvestrini 2.4g"
+#define DEFAULT_HOME_PASS       "11042025"
 #define MDNS_HOSTNAME           "fz8"   // Accessibile come http://fz8.local da rete di casa
 
 #endif // CONFIG_H
