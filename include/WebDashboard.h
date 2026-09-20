@@ -3,7 +3,6 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
-#include <WiFiMulti.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <Preferences.h>
@@ -338,6 +337,9 @@ public:
     WebDashboard() : 
         _server(80), 
         _active(false), 
+        _lastStaAttempt(0),
+        _candidateIdx(0),
+        _staReported(false),
         _filter(nullptr), 
         _dynPtr(nullptr), 
         _uiPtr(nullptr) {}
@@ -355,29 +357,33 @@ public:
         _homePass = _prefs.getString("homePass", DEFAULT_HOME_PASS);
         _prefs.end();
 
-        // 2. Avvia Wi-Fi in Modalita Doppia (AP Aperto + STA)
+        // Registra eventi Wi-Fi
+        WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+            if (event == ARDUINO_EVENT_WIFI_STA_CONNECTED) {
+                Serial.println("[WIFI-EVENT] STA Connesso con successo!");
+            } else if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
+                Serial.printf("[WIFI-EVENT] IP ottenuto: %s\n", WiFi.localIP().toString().c_str());
+            } else if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+                Serial.printf("[WIFI-EVENT] STA Disconnesso (motivo: %d)\n", info.wifi_sta_disconnected.reason);
+            } else if (event == ARDUINO_EVENT_WIFI_AP_START) {
+                Serial.println("[WIFI-EVENT] SoftAP aperto avviato!");
+            } else if (event == ARDUINO_EVENT_WIFI_AP_STACONNECTED) {
+                Serial.println("[WIFI-EVENT] Dispositivo connesso al SoftAP!");
+            }
+        });
+
+        // 2. Avvia Wi-Fi in Modalita Doppia (AP Aperto + STA) sul Canale 5
         WiFi.mode(WIFI_AP_STA);
-        if (strlen(AP_PASSWORD) == 0) {
-            WiFi.softAP(AP_SSID); // Rete APERTA senza alcuna password!
-            Serial.printf("[WIFI] SoftAP APERTO Avviato: SSID='%s' (Nessuna Password), IP=%s\n", 
-                          AP_SSID, WiFi.softAPIP().toString().c_str());
-        } else {
-            WiFi.softAP(AP_SSID, AP_PASSWORD);
-            Serial.printf("[WIFI] SoftAP Avviato: SSID='%s', Pass='%s', IP=%s\n", 
-                          AP_SSID, AP_PASSWORD, WiFi.softAPIP().toString().c_str());
-        }
+        WiFi.softAP(AP_SSID, nullptr, 5, 0, 4); // Rete aperta sul canale 5
         delay(100);
 
-        // Aggiungi le reti note a WiFiMulti (Silvestrini 2.4g e Silver)
-        _wifiMulti.addAP("Silvestrini 2.4g", "11042025");
-        _wifiMulti.addAP("Silvestrini 2.4g", "silver11");
-        _wifiMulti.addAP("Silvestrini 2.4g", "Silver11");
-        _wifiMulti.addAP("Silver", "silver11");
-        _wifiMulti.addAP("Silver", "Silver11");
-        if (_homeSsid.length() > 0 && _homeSsid != "Silvestrini 2.4g" && _homeSsid != "Silver") {
-            _wifiMulti.addAP(_homeSsid.c_str(), _homePass.c_str());
-        }
-        _wifiMulti.run();
+        IPAddress apIp = WiFi.softAPIP();
+        Serial.printf("[WIFI] SoftAP APERTO ATTIVO: SSID='%s' (Nessuna Password, Canale 5), IP=%s\n", 
+                      AP_SSID, apIp.toString().c_str());
+
+        // Primo tentativo con la rete di casa nota (Silvestrini 2.4g)
+        Serial.println("[WIFI] Avvio connessione in background a Silvestrini 2.4g / Silver...");
+        tryNextStaCandidate(true);
 
         // 3. Avvia mDNS responder (http://fz8.local)
         if (MDNS.begin(MDNS_HOSTNAME)) {
@@ -520,18 +526,57 @@ public:
 
     void handleClient() {
         if (_active) {
-            _wifiMulti.run();
+            tryNextStaCandidate(false);
             _server.handleClient();
         }
     }
 
+    void tryNextStaCandidate(bool force = false) {
+        if (WiFi.status() == WL_CONNECTED) {
+            if (!_staReported) {
+                _staReported = true;
+                Serial.printf("[WIFI] *** CONNESSO AL WI-FI DI CASA! ***\n");
+                Serial.printf("[WIFI] SSID: '%s' | IP: %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+                Serial.printf("[WIFI] Raggiungibile su: http://%s.local oppure http://%s\n", 
+                              MDNS_HOSTNAME, WiFi.localIP().toString().c_str());
+            }
+            return;
+        }
+
+        _staReported = false;
+        uint32_t now = millis();
+        if (!force && (now - _lastStaAttempt < 15000)) return; // Ritenta ogni 15s in background
+        _lastStaAttempt = now;
+
+        struct WifiCandidate { const char* ssid; const char* pass; };
+        static const WifiCandidate candidates[] = {
+            { "Silvestrini 2.4g", "11042025" },
+            { "Silvestrini 2.4g", "Silver11" },
+            { "Silvestrini 2.4g", "silver11" },
+            { "Silver", "silver11" },
+            { "Silver", "Silver11" }
+        };
+        const int numCandidates = sizeof(candidates) / sizeof(candidates[0]);
+
+        const char* ssid = candidates[_candidateIdx].ssid;
+        const char* pass = candidates[_candidateIdx].pass;
+        _candidateIdx = (_candidateIdx + 1) % numCandidates;
+
+        Serial.printf("[WIFI-STA] Tentativo connessione a '%s' (pass: '%s')...\n", ssid, pass);
+        WiFi.disconnect(false);
+        delay(50);
+        WiFi.begin(ssid, pass);
+    }
+
 private:
     WebServer _server;
-    WiFiMulti _wifiMulti;
     Preferences _prefs;
     bool _active;
     String _homeSsid;
     String _homePass;
+    uint32_t _lastStaAttempt;
+    int _candidateIdx;
+    bool _staReported;
     MotorcycleFilter* _filter;
     const MotorcycleDynamics* _dynPtr;
     DisplayUI* _uiPtr;
