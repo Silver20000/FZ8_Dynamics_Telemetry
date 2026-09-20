@@ -36,7 +36,10 @@ public:
         _prevRoll(0.0f),
         _prevNeedleX(65), _prevNeedleY(30),
         _prevDotX(65), _prevDotY(65),
-        _wifiActive(false) {}
+        _wifiActive(false),
+        _autoCycle(false),
+        _autoCycleIntervalMs(6000),
+        _lastCycleMillis(0) {}
 
     bool begin() {
         // Initialize SPI with custom pins on ESP32-C3
@@ -66,6 +69,21 @@ public:
         _needsFullRedraw = true;
     }
 
+    void setScreen(UIScreenMode mode) {
+        _currentScreen = (UIScreenMode)(mode % SCREEN_COUNT);
+        _needsFullRedraw = true;
+    }
+
+    UIScreenMode getScreen() const { return _currentScreen; }
+
+    void setAutoCycle(bool enable, uint32_t intervalMs = 6000) {
+        _autoCycle = enable;
+        _autoCycleIntervalMs = intervalMs;
+        _lastCycleMillis = millis();
+    }
+
+    bool isAutoCycle() const { return _autoCycle; }
+
     void setWifiStatus(bool active) {
         if (_wifiActive != active) {
             _wifiActive = active;
@@ -74,6 +92,11 @@ public:
     }
 
     void update(const MotorcycleDynamics& dyn) {
+        if (_autoCycle && (millis() - _lastCycleMillis >= _autoCycleIntervalMs)) {
+            _lastCycleMillis = millis();
+            nextScreen();
+        }
+
         if (_needsFullRedraw) {
             _lcd.fillScreen(COLOR_BLACK);
             switch (_currentScreen) {
@@ -139,6 +162,9 @@ private:
     int16_t _prevNeedleX, _prevNeedleY;
     int16_t _prevDotX, _prevDotY;
     bool _wifiActive;
+    bool _autoCycle;
+    uint32_t _autoCycleIntervalMs;
+    uint32_t _lastCycleMillis;
 
     void drawBootLogo() {
         _lcd.fillScreen(COLOR_BLACK);

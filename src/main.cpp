@@ -100,6 +100,12 @@ void setup() {
     // 3. Initialize Dynamics Filter & Load Stored Zero Tare from Flash NVS
     motoFilter.begin();
 
+    // 4. Start Wi-Fi Dual Mode (Hotspot + Home Wi-Fi) by default
+    Serial.println("[SYSTEM] Starting Wi-Fi Dual Mode (AP + STA)...");
+    webServer.start(&motoFilter, &currentDynamics, &uiDisplay);
+    uiDisplay.setWifiStatus(true);
+    digitalWrite(STATUS_LED_PIN, LOW); // LED ON: Wi-Fi active
+
     lastImuMicros = micros();
     lastDisplayMillis = millis();
     lastBaroMillis = millis();

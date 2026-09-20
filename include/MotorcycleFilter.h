@@ -102,6 +102,18 @@ public:
 
     float getTareRoll() const { return _tareRoll; }
     float getTarePitch() const { return _tarePitch; }
+    float getRawRoll() const { return _roll; }
+    float getRawPitch() const { return _pitch; }
+
+    void adjustTare(float deltaRoll, float deltaPitch) {
+        _tareRoll += deltaRoll;
+        _tarePitch += deltaPitch;
+        _prefs.begin("fz8_cal", false);
+        _prefs.putFloat("tareRoll", _tareRoll);
+        _prefs.putFloat("tarePitch", _tarePitch);
+        _prefs.end();
+        Serial.printf("[FILTER] Tare Adjusted: Roll=%.2f, Pitch=%.2f\n", _tareRoll, _tarePitch);
+    }
 
     void update(const IMURawData& raw, MotorcycleDynamics& outDynamics) {
         uint32_t nowMicros = micros();
