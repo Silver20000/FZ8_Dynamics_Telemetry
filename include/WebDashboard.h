@@ -1080,15 +1080,16 @@ public:
             eventHandlerRegistered = true;
         }
 
-        // 1. Avvio SoftAP diretto e affidabile (WIFI_AP_STA per compatibilità totale RF su ESP32-C3)
+        // 1. Avvio SoftAP diretto e affidabile
         WiFi.persistent(false);
         WiFi.mode(WIFI_AP_STA);
-        bool apOk = WiFi.softAP(AP_SSID, AP_PASSWORD);
+        const char* pass = (strlen(AP_PASSWORD) >= 8) ? AP_PASSWORD : nullptr;
+        bool apOk = WiFi.softAP(AP_SSID, pass);
         delay(100);
 
         IPAddress apIp = WiFi.softAPIP();
-        Serial.printf("[WIFI] SoftAP Avviato (%s): SSID='%s', Pass='%s', IP=%s\n", 
-                      apOk ? "OK" : "FALLITO", AP_SSID, AP_PASSWORD, apIp.toString().c_str());
+        Serial.printf("[WIFI] SoftAP Avviato (%s): SSID='%s', Sicurezza='%s', IP=%s\n", 
+                      apOk ? "OK" : "FALLITO", AP_SSID, pass ? "WPA2" : "APERTA (NESSUNA PASSWORD)", apIp.toString().c_str());
 
         // 2. Avvia Captive Portal DNS Server (porta 53, risolve qualsiasi dominio su IP AP)
         _dnsServer.setErrorReplyCode(DNSReplyCode::NoError);

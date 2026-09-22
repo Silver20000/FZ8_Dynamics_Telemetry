@@ -99,9 +99,9 @@ enum RadioMode {
 // Canale 1 dedicato, zero salti di frequenza, Captive Portal DNS integrato
 // ==============================================================================
 #define AP_SSID                 "FZ8-Telemetry"
-#define AP_PASSWORD             "yamahafz8"      // Password WPA2 (richiesta da iOS, Android e Windows 11)
+#define AP_PASSWORD             ""               // Rete APERTA (nessuna password, massima compatibilità smartphone)
 #define AP_IP_ADDR              "192.168.4.1"
-#define AP_CHANNEL              5       // Canale 5 (sincronizzato con l'ambiente 2.4GHz locale)
-#define MDNS_HOSTNAME           "fz8"   // Accessibile come http://fz8.local
+#define AP_CHANNEL              1                // Canale 1 universale
+#define MDNS_HOSTNAME           "fz8"            // Accessibile come http://fz8.local
 
 #endif // CONFIG_H
