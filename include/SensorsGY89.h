@@ -14,6 +14,10 @@
 #define LSM303D_EXPECTED_ID     0x49
 #define LSM303D_CTRL1           0x20
 #define LSM303D_CTRL2           0x21
+#define LSM303D_CTRL5           0x24
+#define LSM303D_CTRL6           0x25
+#define LSM303D_CTRL7           0x26
+#define LSM303D_OUT_X_L_M       0x08
 #define LSM303D_OUT_X_L_A       0x28
 
 // L3GD20 Registers & Constants
@@ -34,6 +38,9 @@
 struct IMURawData {
     float ax, ay, az;       // Linear acceleration in G (longitudinal, lateral, vertical)
     float gx, gy, gz;       // Angular velocity in deg/s (roll rate, pitch rate, yaw rate)
+    float mx, my, mz;       // 3-axis magnetic field in Gauss
+    float heading_deg;      // Magnetic compass heading (0 - 360 deg)
+    char cardinal[4];       // N, NE, E, SE, S, SW, W, NW
     float temp_c;           // Temperature in Celsius
     float pressure_hpa;     // Barometric pressure in hPa
     float altitude_m;       // Calculated altitude in meters
@@ -136,10 +143,68 @@ public:
             outData.gz = (rawGz * GYRO_SCALE) - _gyroBiasZ;
         }
 
+        // Read Magnetometer (6 bytes, auto-increment: bit 7 = 1 -> 0x80)
+        uint8_t mBuf[6];
+        if (readI2C(_lsmAddr, LSM303D_OUT_X_L_M | 0x80, mBuf, 6)) {
+            int16_t rawMx = (int16_t)((mBuf[1] << 8) | mBuf[0]);
+            int16_t rawMy = (int16_t)((mBuf[3] << 8) | mBuf[2]);
+            int16_t rawMz = (int16_t)((mBuf[5] << 8) | mBuf[4]);
+
+            // +/- 4 Gauss: sensitivity = 0.16 mgauss/LSB = 0.00016 gauss/LSB
+            const float MAG_SCALE = 0.00016f;
+            outData.mx = rawMx * MAG_SCALE;
+            outData.my = rawMy * MAG_SCALE;
+            outData.mz = rawMz * MAG_SCALE;
+        }
+
         outData.temp_c = _cachedTemp;
         outData.pressure_hpa = _cachedPressure;
         outData.altitude_m = _cachedAltitude;
         outData.data_ready = true;
+    }
+
+    static void computeTiltCompensatedHeading(float rollDeg, float pitchDeg, 
+                                              float gLat, float yawRateDps,
+                                              float mx, float my, float mz, 
+                                              float& outHeading, char outCardinal[4],
+                                              bool& outValid) {
+        // Gating: Heading is marked VALID only when motorcycle is upright and riding straight.
+        // In cornering, centripetal acceleration tilts the apparent gravity vector along the bike frame,
+        // which makes static tilt compensation geometrically corrupted.
+        bool isStraight = (fabsf(rollDeg) < COMPASS_MAX_ROLL_VALID_DEG &&
+                           fabsf(gLat) < COMPASS_MAX_GLAT_VALID &&
+                           fabsf(yawRateDps) < COMPASS_MAX_YAWRATE_VALID);
+
+        outValid = isStraight;
+
+        float rollRad = rollDeg * ((float)M_PI / 180.0f);
+        float pitchRad = pitchDeg * ((float)M_PI / 180.0f);
+
+        float cp = cosf(pitchRad);
+        float sp = sinf(pitchRad);
+        float cr = cosf(rollRad);
+        float sr = sinf(rollRad);
+
+        // De-rotate magnetometer vector to horizontal plane
+        float xh = mx * cp + mz * sp;
+        float yh = mx * sr * sp + my * cr - mz * sr * cp;
+
+        float heading = atan2f(-yh, xh) * (180.0f / (float)M_PI);
+        heading += MAG_DECLINATION_DEG; // Compensate for local magnetic declination
+
+        if (heading < 0.0f) heading += 360.0f;
+        if (heading >= 360.0f) heading -= 360.0f;
+
+        outHeading = heading;
+
+        if (heading >= 337.5f || heading < 22.5f) strcpy(outCardinal, "N");
+        else if (heading >= 22.5f && heading < 67.5f) strcpy(outCardinal, "NE");
+        else if (heading >= 67.5f && heading < 112.5f) strcpy(outCardinal, "E");
+        else if (heading >= 112.5f && heading < 157.5f) strcpy(outCardinal, "SE");
+        else if (heading >= 157.5f && heading < 202.5f) strcpy(outCardinal, "S");
+        else if (heading >= 202.5f && heading < 247.5f) strcpy(outCardinal, "SW");
+        else if (heading >= 247.5f && heading < 292.5f) strcpy(outCardinal, "W");
+        else strcpy(outCardinal, "NW");
     }
 
     // Non-blocking state machine for BMP180 baro/altimeter
