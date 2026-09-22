@@ -1080,33 +1080,15 @@ public:
             eventHandlerRegistered = true;
         }
 
-        // 1. Reset e configurazione SoftAP (WIFI_AP puro, zero interferenza STA)
+        // 1. Avvio SoftAP diretto e affidabile (WIFI_AP_STA per compatibilità totale RF su ESP32-C3)
         WiFi.persistent(false);
-        WiFi.disconnect(true, true);
-        WiFi.softAPdisconnect(true);
-        WiFi.mode(WIFI_OFF);
+        WiFi.mode(WIFI_AP_STA);
+        bool apOk = WiFi.softAP(AP_SSID, AP_PASSWORD);
         delay(100);
 
-        WiFi.mode(WIFI_AP);
-        WiFi.setSleep(false); // Disabilita power-save per garantire beacon frames continui a 100ms
-
-        IPAddress apIp(192, 168, 4, 1);
-        IPAddress gateway(192, 168, 4, 1);
-        IPAddress subnet(255, 255, 255, 0);
-        WiFi.softAPConfig(apIp, gateway, subnet);
-
-        // Se password ha almeno 8 caratteri usa WPA2, altrimenti rete aperta
-        const char* pass = (strlen(AP_PASSWORD) >= 8) ? AP_PASSWORD : nullptr;
-        bool apOk = WiFi.softAP(AP_SSID, pass, AP_CHANNEL, 0, 4);
-        delay(100);
-
-        WiFi.setTxPower(WIFI_POWER_19_5dBm);
-        esp_wifi_set_ps(WIFI_PS_NONE);
-        esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
-
-        IPAddress actualIp = WiFi.softAPIP();
-        Serial.printf("[WIFI] SoftAP Avviato (%s): SSID='%s', Pass='%s', Ch=%d, IP=%s\n", 
-                      apOk ? "OK" : "FALLITO", AP_SSID, pass ? pass : "[APERTO]", AP_CHANNEL, actualIp.toString().c_str());
+        IPAddress apIp = WiFi.softAPIP();
+        Serial.printf("[WIFI] SoftAP Avviato (%s): SSID='%s', Pass='%s', IP=%s\n", 
+                      apOk ? "OK" : "FALLITO", AP_SSID, AP_PASSWORD, apIp.toString().c_str());
 
         // 2. Avvia Captive Portal DNS Server (porta 53, risolve qualsiasi dominio su IP AP)
         _dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
