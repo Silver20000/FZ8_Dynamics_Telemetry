@@ -6,13 +6,18 @@
     <meta name="theme-color" content="#0a0e17">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Yamaha FZ8 Telemetry BLE</title>
+    <title>Yamaha FZ8 Telemetry & GPS Tracker</title>
     <link rel="manifest" href="manifest.json">
+    
+    <!-- Leaflet Map CSS & JS (100% Free & Open Source) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
     <style>
         :root {
             --bg-main: #0a0e17;
             --bg-card: #121824;
-            --bg-card-glass: rgba(18, 24, 36, 0.85);
+            --bg-card-glass: rgba(18, 24, 36, 0.88);
             --border-card: #1f2a3e;
             --text-main: #f0f4f8;
             --text-dim: #7e8c9f;
@@ -29,7 +34,7 @@
             background: radial-gradient(circle at 50% 0%, #162032 0%, var(--bg-main) 100%);
             color: var(--text-main);
             min-height: 100vh;
-            padding: 10px 12px 20px 12px;
+            padding: 10px 12px 24px 12px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -48,14 +53,26 @@
             color: white; font-weight: 900; font-size: 11px; padding: 3px 7px; border-radius: 6px;
         }
         .app-title { font-size: 14px; font-weight: 700; }
+        
+        .header-actions { display: flex; align-items: center; gap: 6px; }
         .conn-btn {
             background: linear-gradient(135deg, var(--yamaha-blue), #0047ba);
-            color: white; border: none; border-radius: 10px; padding: 6px 12px; font-size: 12px;
-            font-weight: 700; display: flex; align-items: center; gap: 6px; cursor: pointer;
+            color: white; border: none; border-radius: 10px; padding: 6px 10px; font-size: 11px;
+            font-weight: 700; display: flex; align-items: center; gap: 5px; cursor: pointer;
             box-shadow: 0 4px 12px rgba(0, 102, 255, 0.35);
         }
         .conn-btn.connected { background: linear-gradient(135deg, #00c853, #009624); box-shadow: 0 4px 12px rgba(0, 200, 83, 0.35); }
         .conn-btn.recording { background: linear-gradient(135deg, var(--accent-red), #b71c1c); animation: pulse-red 1.5s infinite; }
+        
+        .gps-status-badge {
+            background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-card);
+            border-radius: 8px; padding: 5px 8px; font-size: 10px; font-weight: 700;
+            display: flex; align-items: center; gap: 4px; color: var(--text-dim);
+        }
+        .gps-status-badge.active { color: var(--accent-green); border-color: rgba(0, 230, 118, 0.3); }
+        .gps-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); }
+        .gps-status-badge.active .gps-dot { background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); }
+
         @keyframes pulse-red {
             0% { box-shadow: 0 0 0 0 rgba(255, 23, 68, 0.7); }
             70% { box-shadow: 0 0 0 10px rgba(255, 23, 68, 0); }
@@ -65,7 +82,7 @@
         /* Navigation Tabs */
         .tab-bar {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
             background: var(--bg-card-glass);
             border: 1px solid var(--border-card);
             border-radius: 12px;
@@ -77,11 +94,12 @@
             border: none;
             color: var(--text-dim);
             font-weight: 700;
-            font-size: 12px;
-            padding: 8px 4px;
+            font-size: 11px;
+            padding: 8px 2px;
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.2s ease;
+            text-align: center;
         }
         .tab-btn.active {
             background: rgba(0, 102, 255, 0.25);
@@ -163,6 +181,80 @@
         .corner-max { font-size: 14px; font-weight: 800; }
         .corner-rate { font-size: 9px; color: var(--text-dim); }
 
+        /* Map Styles */
+        .map-container-wrap {
+            position: relative;
+            width: 100%;
+            height: 360px;
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid var(--border-card);
+        }
+        #mapView {
+            width: 100%;
+            height: 100%;
+            background: #0d1117;
+        }
+        .map-overlay-stats {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 6px;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        .map-stat-pill {
+            background: rgba(10, 14, 23, 0.85);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border-card);
+            border-radius: 10px;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .map-stat-label { font-size: 8px; font-weight: 800; color: var(--text-dim); text-transform: uppercase; }
+        .map-stat-val { font-size: 14px; font-weight: 900; color: var(--yamaha-cyan); font-variant-numeric: tabular-nums; }
+        
+        .map-floating-controls {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            z-index: 1000;
+        }
+        .map-ctrl-btn {
+            background: rgba(18, 24, 36, 0.9);
+            backdrop-filter: blur(6px);
+            border: 1px solid var(--border-card);
+            color: var(--text-main);
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .map-ctrl-btn.active {
+            border-color: var(--yamaha-cyan);
+            color: var(--yamaha-cyan);
+            background: rgba(0, 212, 255, 0.2);
+        }
+
+        .map-legend {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 10px; color: var(--text-dim); padding-top: 4px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 4px; font-weight: 700; }
+        .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
         /* Settings Grid & Screen Grid */
         .screen-grid {
             display: grid;
@@ -220,7 +312,7 @@
 
         .alert-flash {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            border: 6px solid var(--accent-red); pointer-events: none; opacity: 0; transition: opacity 0.1s ease; z-index: 999;
+            border: 6px solid var(--accent-red); pointer-events: none; opacity: 0; transition: opacity 0.1s ease; z-index: 9999;
         }
         .alert-flash.active { opacity: 1; }
     </style>
@@ -234,21 +326,28 @@
     <header>
         <div class="logo-box">
             <span class="logo-badge">FZ8</span>
-            <span class="app-title">Telemetry BLE</span>
+            <span class="app-title">Telemetry & GPS</span>
         </div>
-        <button class="conn-btn" id="btnConnect" onclick="toggleBluetooth()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
-            </svg>
-            <span id="btnConnectText">Connetti BLE</span>
-        </button>
+        <div class="header-actions">
+            <div class="gps-status-badge" id="gpsStatusBadge">
+                <div class="gps-dot"></div>
+                <span id="gpsStatusText">GPS Off</span>
+            </div>
+            <button class="conn-btn" id="btnConnect" onclick="toggleBluetooth()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
+                </svg>
+                <span id="btnConnectText">BLE</span>
+            </button>
+        </div>
     </header>
 
-    <!-- Navigation Tabs -->
+    <!-- Navigation Tabs (4 TABS) -->
     <div class="tab-bar">
         <button class="tab-btn active" onclick="switchTab('tabLive', this)">📊 Live</button>
-        <button class="tab-btn" onclick="switchTab('tabScreens', this)">📺 Schermi LCD</button>
-        <button class="tab-btn" onclick="switchTab('tabSettings', this)">⚙️ Impostazioni</button>
+        <button class="tab-btn" onclick="switchTab('tabMap', this)">🗺️ Mappa</button>
+        <button class="tab-btn" onclick="switchTab('tabScreens', this)">📺 Schermi</button>
+        <button class="tab-btn" onclick="switchTab('tabSettings', this)">⚙️ Setup</button>
     </div>
 
     <!-- TAB 1: LIVE TELEMETRY -->
@@ -367,7 +466,81 @@
         </div>
     </div>
 
-    <!-- TAB 2: SCHERMATE DISPLAY LCD 1.6" -->
+    <!-- TAB 2: MAPPA & TRACCIATO GPS -->
+    <div id="tabMap" class="tab-content">
+        <div class="card" style="padding:10px;">
+            <div class="lean-header" style="margin-bottom:8px;">
+                <span>Mappa Tracciato GPS Dinamico</span>
+                <span id="lblGpsAcc" style="color:var(--text-dim);font-size:10px;">Acc: -- m</span>
+            </div>
+
+            <div class="map-container-wrap">
+                <div id="mapView"></div>
+                
+                <!-- Floating Real-time Stats Overlay -->
+                <div class="map-overlay-stats">
+                    <div class="map-stat-pill">
+                        <span class="map-stat-label">Velocità</span>
+                        <span class="map-stat-val" id="lblGpsSpeed">0 km/h</span>
+                    </div>
+                    <div class="map-stat-pill">
+                        <span class="map-stat-label">Distanza</span>
+                        <span class="map-stat-val" id="lblGpsDist">0.0 km</span>
+                    </div>
+                    <div class="map-stat-pill">
+                        <span class="map-stat-label">Piega Live</span>
+                        <span class="map-stat-val" id="lblMapLean">0.0°</span>
+                    </div>
+                </div>
+
+                <!-- Floating Map Buttons -->
+                <div class="map-floating-controls">
+                    <button class="map-ctrl-btn active" id="btnFollowBike" onclick="toggleFollowBike()" title="Segui Moto">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+                        </svg>
+                    </button>
+                    <button class="map-ctrl-btn" onclick="clearGpsTrack()" title="Cancella Traccia">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Heatmap Legend -->
+            <div class="map-legend" style="margin-top:8px;">
+                <div class="legend-item"><span class="legend-dot" style="background:#00e676;"></span> Diritto</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#00d4ff;"></span> Piega SX (&gt;15°)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#ff9100;"></span> Piega DX (&gt;15°)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#ff1744;"></span> Limite (&gt;38°)</div>
+            </div>
+        </div>
+
+        <!-- GPS Actions Bar -->
+        <div class="actions-bar">
+            <button class="action-btn" onclick="exportGpx()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+                <span>Esporta GPX</span>
+            </button>
+            <button class="action-btn" onclick="exportCsv()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                </svg>
+                <span>Scarica CSV</span>
+            </button>
+            <button class="action-btn" onclick="initGpsTracking(true)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                </svg>
+                <span>Riavvia GPS</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- TAB 3: SCHERMATE DISPLAY LCD 1.6" -->
     <div id="tabScreens" class="tab-content">
         <div class="card">
             <div class="lean-header" style="margin-bottom:10px;">
@@ -425,7 +598,7 @@
         </div>
     </div>
 
-    <!-- TAB 3: CALIBRAZIONE & IMPOSTAZIONI -->
+    <!-- TAB 4: CALIBRAZIONE & IMPOSTAZIONI -->
     <div id="tabSettings" class="tab-content">
         <div class="card">
             <div class="lean-header" style="margin-bottom:8px;">
@@ -519,12 +692,29 @@
     const MAX_GRAPH_PTS = 120;
     const gTrail = [];
 
+    // GPS & Map State
+    let map = null;
+    let bikeMarker = null;
+    let gpsWatchId = null;
+    let followBike = true;
+    let totalGpsDistM = 0;
+    let lastGpsPos = null;
+    let gpsTrackSegments = []; // Array of Leaflet polylines
+    let currentGpsState = { lat: 0, lon: 0, speedKmh: 0, altitude: 0, heading: 0, accuracy: 0 };
+
     // Tab Switching
     function switchTab(tabId, btn) {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
         document.getElementById(tabId).classList.add('active');
         btn.classList.add('active');
+
+        if (tabId === 'tabMap') {
+            setTimeout(() => {
+                if (!map) initMap();
+                else map.invalidateSize();
+            }, 100);
+        }
     }
 
     // Bluetooth Connection
@@ -537,7 +727,7 @@
         }
 
         try {
-            document.getElementById("btnConnectText").innerText = "Ricerca...";
+            document.getElementById("btnConnectText").innerText = "...";
             bleDevice = await navigator.bluetooth.requestDevice({
                 filters: [
                     { namePrefix: 'FZ8' },
@@ -547,7 +737,7 @@
             });
 
             bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-            document.getElementById("btnConnectText").innerText = "Connessione...";
+            document.getElementById("btnConnectText").innerText = "Conn...";
 
             bleServer = await bleDevice.gatt.connect();
             const service = await bleServer.getPrimaryService(SERVICE_UUID);
@@ -562,7 +752,7 @@
 
             isConnected = true;
             document.getElementById("btnConnect").classList.add("connected");
-            document.getElementById("btnConnectText").innerText = "FZ8 Connesso";
+            document.getElementById("btnConnectText").innerText = "BLE ON";
             if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
         } catch (err) {
             console.error("BLE Error:", err);
@@ -573,7 +763,7 @@
     function onDisconnected() {
         isConnected = false;
         document.getElementById("btnConnect").classList.remove("connected");
-        document.getElementById("btnConnectText").innerText = "Connetti BLE";
+        document.getElementById("btnConnectText").innerText = "BLE";
     }
 
     // Send Remote Command over BLE to ESP32
@@ -678,6 +868,9 @@
         if (isRecording) {
             recordedData.push({
                 time: (Date.now() - recStartTime) / 1000,
+                lat: currentGpsState.lat,
+                lon: currentGpsState.lon,
+                speedKmh: currentGpsState.speedKmh.toFixed(1),
                 roll: roll.toFixed(2),
                 pitch: pitch.toFixed(2),
                 gLat: gLat.toFixed(3),
@@ -742,6 +935,7 @@
     function renderUI() {
         let absRoll = Math.abs(state.roll);
         document.getElementById("lblRollDeg").innerText = absRoll.toFixed(1) + "°";
+        document.getElementById("lblMapLean").innerText = absRoll.toFixed(1) + "°";
         
         let dirText = (absRoll < 2.0) ? "DIRITTO" : (state.roll < 0 ? "◄ SINISTRA" : "DESTRA ►");
         let dirEl = document.getElementById("lblRollDir");
@@ -818,25 +1012,211 @@
         }
     }
 
+    // =========================================================================
+    // GPS & LEAFLET MAP TRACKING SYSTEM
+    // =========================================================================
+    function initMap() {
+        if (map) return;
+        
+        // Default center: Italy
+        const defaultLat = 45.4642;
+        const defaultLon = 9.1900;
+
+        map = L.map('mapView', {
+            center: [defaultLat, defaultLon],
+            zoom: 15,
+            zoomControl: false,
+            attributionControl: false
+        });
+
+        // Crisp Dark Map Tiles (CartoDB Dark Matter)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+            subdomains: 'abcd'
+        }).addTo(map);
+
+        // Custom Bike Marker
+        const bikeIcon = L.divIcon({
+            className: 'bike-map-marker',
+            html: `
+                <div style="width:20px;height:20px;background:radial-gradient(circle,#00d4ff 0%,#0066ff 100%);border:2px solid #ffffff;border-radius:50%;box-shadow:0 0 10px #00d4ff;display:flex;align-items:center;justify-content:center;">
+                    <div style="width:4px;height:4px;background:#ffffff;border-radius:50%;"></div>
+                </div>`,
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+        });
+
+        bikeMarker = L.marker([defaultLat, defaultLon], { icon: bikeIcon }).addTo(map);
+
+        // Start GPS
+        initGpsTracking();
+    }
+
+    function initGpsTracking(forceRestart = false) {
+        if (!navigator.geolocation) {
+            alert("Il tuo browser non supporta il GPS Geolocation.");
+            return;
+        }
+
+        if (gpsWatchId && forceRestart) {
+            navigator.geolocation.clearWatch(gpsWatchId);
+            gpsWatchId = null;
+        }
+
+        const badge = document.getElementById("gpsStatusBadge");
+        const badgeText = document.getElementById("gpsStatusText");
+
+        gpsWatchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+                const speedKmh = pos.coords.speed ? (pos.coords.speed * 3.6) : 0;
+                const alt = pos.coords.altitude || 0;
+                const acc = pos.coords.accuracy || 0;
+                const heading = pos.coords.heading || 0;
+
+                currentGpsState = { lat, lon, speedKmh, altitude: alt, heading, accuracy: acc };
+
+                badge.classList.add("active");
+                badgeText.innerText = "GPS Fix";
+                document.getElementById("lblGpsAcc").innerText = `Acc: ±${acc.toFixed(0)}m`;
+                document.getElementById("lblGpsSpeed").innerText = `${speedKmh.toFixed(0)} km/h`;
+
+                if (bikeMarker) {
+                    bikeMarker.setLatLng([lat, lon]);
+                }
+
+                if (lastGpsPos) {
+                    const dist = calculateDistance(lastGpsPos.lat, lastGpsPos.lon, lat, lon);
+                    if (dist > 1.5) { // Minimum 1.5m movement to add trackpoint
+                        totalGpsDistM += dist;
+                        document.getElementById("lblGpsDist").innerText = `${(totalGpsDistM / 1000).toFixed(2)} km`;
+                        
+                        // Pick color based on Lean Angle
+                        let color = "#00e676"; // Green straight
+                        let absRoll = Math.abs(state.roll);
+                        if (absRoll >= 38.0) color = "#ff1744"; // Red extreme lean
+                        else if (state.roll < -15.0) color = "#00d4ff"; // Cyan Left
+                        else if (state.roll > 15.0) color = "#ff9100"; // Orange Right
+
+                        if (map) {
+                            let seg = L.polyline([[lastGpsPos.lat, lastGpsPos.lon], [lat, lon]], {
+                                color: color,
+                                weight: 4.5,
+                                opacity: 0.9,
+                                lineJoin: 'round'
+                            }).addTo(map);
+                            gpsTrackSegments.push(seg);
+                        }
+
+                        lastGpsPos = { lat, lon };
+                    }
+                } else {
+                    lastGpsPos = { lat, lon };
+                    if (map) map.setView([lat, lon], 16);
+                }
+
+                if (followBike && map) {
+                    map.panTo([lat, lon]);
+                }
+            },
+            (err) => {
+                console.warn("GPS Warning:", err.message);
+                badge.classList.remove("active");
+                badgeText.innerText = "No GPS";
+            },
+            { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+        );
+    }
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371000; // meters
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    function toggleFollowBike() {
+        followBike = !followBike;
+        const btn = document.getElementById("btnFollowBike");
+        btn.classList.toggle("active", followBike);
+        if (followBike && lastGpsPos && map) {
+            map.setView([lastGpsPos.lat, lastGpsPos.lon], 16);
+        }
+    }
+
+    function clearGpsTrack() {
+        if (!confirm("Vuoi cancellare la traccia GPS della mappa?")) return;
+        for (let seg of gpsTrackSegments) {
+            if (map) map.removeLayer(seg);
+        }
+        gpsTrackSegments = [];
+        totalGpsDistM = 0;
+        document.getElementById("lblGpsDist").innerText = "0.0 km";
+    }
+
+    // =========================================================================
+    // EXPORT FUNCTIONS (CSV & GPX)
+    // =========================================================================
     function exportCsv() {
         if (recordedData.length === 0) {
             alert("Nessun dato registrato. Premi 'REC Sessione' prima di guidare!");
             return;
         }
 
-        let csv = "Time_s,Roll_deg,Pitch_deg,G_Lat,G_Long,RollRate_dps,YawRate_dps,Altitude_m\n";
+        let csv = "Time_s,Latitude,Longitude,Speed_kmh,Roll_deg,Pitch_deg,G_Lat,G_Long,RollRate_dps,YawRate_dps,Altitude_m\n";
         for (let r of recordedData) {
-            csv += `${r.time},${r.roll},${r.pitch},${r.gLat},${r.gLong},${r.rollRate},${r.yawRate},${r.alt}\n`;
+            csv += `${r.time},${r.lat},${r.lon},${r.speedKmh},${r.roll},${r.pitch},${r.gLat},${r.gLong},${r.rollRate},${r.yawRate},${r.alt}\n`;
         }
 
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        downloadFile(csv, `FZ8_Telemetry_${getTimestampStr()}.csv`, "text/csv;charset=utf-8;");
+    }
+
+    function exportGpx() {
+        if (recordedData.length === 0) {
+            alert("Nessun dato registrato. Premi 'REC Sessione' per salvare il tracciato!");
+            return;
+        }
+
+        let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+        gpx += `<gpx version="1.1" creator="Yamaha FZ8 Telemetry Computer" xmlns="http://www.topografix.com/GPX/1/1">\n`;
+        gpx += `  <metadata><name>FZ8 Motorcycle Telemetry Session</name><time>${new Date().toISOString()}</time></metadata>\n`;
+        gpx += `  <trk>\n    <name>FZ8 Ride</name>\n    <trkseg>\n`;
+
+        for (let r of recordedData) {
+            if (r.lat && r.lon && r.lat !== 0 && r.lon !== 0) {
+                gpx += `      <trkpt lat="${r.lat}" lon="${r.lon}">\n`;
+                gpx += `        <ele>${r.alt}</ele>\n`;
+                gpx += `        <extensions>\n`;
+                gpx += `          <speed>${(parseFloat(r.speedKmh)/3.6).toFixed(2)}</speed>\n`;
+                gpx += `          <roll>${r.roll}</roll>\n`;
+                gpx += `          <g_long>${r.gLong}</g_long>\n`;
+                gpx += `        </extensions>\n`;
+                gpx += `      </trkpt>\n`;
+            }
+        }
+
+        gpx += `    </trkseg>\n  </trk>\n</gpx>\n`;
+        downloadFile(gpx, `FZ8_Track_${getTimestampStr()}.gpx`, "application/gpx+xml;charset=utf-8;");
+    }
+
+    function downloadFile(content, fileName, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `FZ8_Telemetry_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.csv`;
+        a.download = fileName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+    }
+
+    function getTimestampStr() {
+        return new Date().toISOString().slice(0,19).replace(/:/g,'-');
     }
 
     // Canvas G-Meter
