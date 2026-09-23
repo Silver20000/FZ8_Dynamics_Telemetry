@@ -1,106 +1,122 @@
 ﻿#include <Arduino.h>
 #include <Wire.h>
-#include <SPI.h>
 #include <WiFi.h>
+#include <esp_now.h>
 #include <esp_wifi.h>
 #include "Config.h"
 #include "SensorsGY89.h"
 #include "MotorcycleFilter.h"
-#include "DisplayUI.h"
-#include "WebDashboard.h"
 #include "SessionLogger.h"
 #include "BluetoothTelemetry.h"
+#include "EspNowProtocol.h"
 
-// Global instances
+// ==============================================================================
+// YAMAHA FZ8 MOTORCYCLE DYNAMICS MASTER UNIT (UNDER-SEAT / TAIL NODE)
+// High-Performance 100Hz IMU Kinematic Gating + 20Hz BLE + 50Hz ESP-NOW
+// ==============================================================================
+
+// Global Instances
 SensorsGY89 imuSensors;
 MotorcycleFilter motoFilter;
-DisplayUI uiDisplay;
 SessionLogger sessionLogger;
 BluetoothTelemetry bleTelemetry;
-WebDashboard webServer;
 
-// Shared dynamics state
+// Dynamics State
 MotorcycleDynamics currentDynamics;
 IMURawData rawImu;
 
+// ESP-NOW Broadcast Setup (for Wireless Cockpit Display)
+uint8_t espNowBroadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+EspNowTelemetryPacket espNowPacket;
+bool espNowActive = false;
+uint8_t selectedScreenIndex = 0;
+
 // Timing intervals
 uint32_t lastImuMicros = 0;
-uint32_t lastDisplayMillis = 0;
 uint32_t lastBaroMillis = 0;
 uint32_t lastLogMillis = 0;
+uint32_t lastEspNowMillis = 0;
+uint32_t lastHeartbeatMillis = 0;
 
-// Radio Mutual Exclusion State (Default: Bluetooth BLE 20Hz for Smartphone App)
-RadioMode currentRadioMode = RADIO_MODE_RACECHRONO;
-
-// Button state machine
+// Button state machine (GPIO 20)
 bool lastButtonState = HIGH;
 uint32_t buttonPressStart = 0;
 bool buttonHandled = false;
 
-void switchRadioMode(RadioMode newMode) {
-    if (newMode == currentRadioMode) return;
-
-    if (newMode == RADIO_MODE_RACECHRONO) {
-        Serial.println("[RADIO] Switch -> MODALITA PISTA (RaceChrono NimBLE 20Hz)...");
-        // 1. Spegni Wi-Fi AP + STA per liberare il frontend RF a 2.4 GHz e CPU
-        webServer.stop();
-        uiDisplay.setWifiStatus(false);
-        uiDisplay.setRadioMode(RADIO_MODE_RACECHRONO);
-        webServer.setRadioMode(RADIO_MODE_RACECHRONO);
-        digitalWrite(STATUS_LED_PIN, HIGH); // LED off
-        delay(100);
-
-        // 2. Avvia NimBLE Server ultraleggero (~25 KB RAM)
-        bleTelemetry.begin();
-        currentRadioMode = RADIO_MODE_RACECHRONO;
-        Serial.println("[RADIO] *** MODALITA PISTA ATTIVA: Wi-Fi OFF, NimBLE 20Hz ON ***");
+void initEspNowBroadcaster() {
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect();
+    
+    if (esp_now_init() == ESP_OK) {
+        esp_now_peer_info_t peerInfo = {};
+        memcpy(peerInfo.peer_addr, espNowBroadcastAddress, 6);
+        peerInfo.channel = 1;
+        peerInfo.encrypt = false;
+        
+        if (esp_now_add_peer(&peerInfo) == ESP_OK) {
+            espNowActive = true;
+            Serial.println("[ESPNOW] Broadcaster attivo a 50Hz (Canale 1) per Cruscotto Wireless!");
+        }
     } else {
-        Serial.println("[RADIO] Switch -> MODALITA DASHBOARD (Wi-Fi AP + STA)...");
-        // 1. Spegni e de-inizializza NimBLE
-        bleTelemetry.stop();
-        delay(100);
-
-        // 2. Avvia Wi-Fi Server
-        webServer.start(&motoFilter, &currentDynamics, &uiDisplay, &sessionLogger, &bleTelemetry);
-        uiDisplay.setWifiStatus(true);
-        uiDisplay.setRadioMode(RADIO_MODE_DASHBOARD);
-        webServer.setRadioMode(RADIO_MODE_DASHBOARD);
-        digitalWrite(STATUS_LED_PIN, LOW); // LED on
-        currentRadioMode = RADIO_MODE_DASHBOARD;
-        Serial.println("[RADIO] *** MODALITA DASHBOARD ATTIVA: Wi-Fi ON, NimBLE OFF ***");
+        Serial.println("[ESPNOW] Inizializzazione ESP-NOW fallita!");
     }
+}
+
+void sendEspNowTelemetry(const MotorcycleDynamics& dyn) {
+    if (!espNowActive) return;
+
+    espNowPacket.timestampMs = millis();
+    espNowPacket.rollDegX10 = (int16_t)(dyn.rollDeg * 10.0f);
+    espNowPacket.pitchDegX10 = (int16_t)(dyn.pitchDeg * 10.0f);
+    espNowPacket.gLateralX100 = (int16_t)(dyn.gLateral * 100.0f);
+    espNowPacket.gLongitudinalX100 = (int16_t)(dyn.gLongitudinal * 100.0f);
+    espNowPacket.rollRateDpsX10 = (int16_t)(dyn.rollRateDps * 10.0f);
+    espNowPacket.yawRateDpsX10 = (int16_t)(dyn.yawRateDps * 10.0f);
+    espNowPacket.totalGX100 = (int16_t)(dyn.totalG * 100.0f);
+    espNowPacket.altitudeM = (int16_t)dyn.altitudeM;
+    espNowPacket.maxLeanLeftX10 = (int16_t)(dyn.maxLeanLeft * 10.0f);
+    espNowPacket.maxLeanRightX10 = (int16_t)(dyn.maxLeanRight * 10.0f);
+    espNowPacket.maxBrakingGX100 = (int16_t)(dyn.maxBrakingG * 100.0f);
+    espNowPacket.maxAccelGX100 = (int16_t)(dyn.maxAccelG * 100.0f);
+    espNowPacket.activeScreen = selectedScreenIndex;
+    
+    uint8_t flags = 0;
+    if (dyn.isLeanWarning) flags |= (1 << 0);
+    if (dyn.isBraking)     flags |= (1 << 1);
+    if (dyn.isAccelerating)flags |= (1 << 2);
+    if (sessionLogger.isLogging()) flags |= (1 << 3);
+    espNowPacket.flags = flags;
+
+    esp_now_send(espNowBroadcastAddress, (uint8_t*)&espNowPacket, sizeof(espNowPacket));
 }
 
 void handleButton() {
     bool currentBtn = digitalRead(BUTTON_PIN);
     uint32_t now = millis();
 
-    // Button pressed (active LOW)
     if (currentBtn == LOW && lastButtonState == HIGH) {
         buttonPressStart = now;
         buttonHandled = false;
-    }
-    // Button held down
-    else if (currentBtn == LOW && !buttonHandled) {
+    } else if (currentBtn == LOW && !buttonHandled) {
         uint32_t duration = now - buttonPressStart;
-        if (duration >= 1500) {
-            // Long Press (>= 1.5s): Commutazione Modalita Radio (Wi-Fi vs NimBLE Pista)
-            RadioMode nextMode = (currentRadioMode == RADIO_MODE_DASHBOARD) ? RADIO_MODE_RACECHRONO : RADIO_MODE_DASHBOARD;
-            switchRadioMode(nextMode);
+        if (duration >= 2000) {
+            // Long Press (>= 2s): Start / Stop Flash Datalogger
+            if (sessionLogger.isLogging()) {
+                sessionLogger.stopSession();
+                Serial.println("[BUTTON] Datalogger STOP");
+            } else {
+                sessionLogger.startSession();
+                Serial.println("[BUTTON] Datalogger START");
+            }
             buttonHandled = true;
         }
-    }
-    // Button released
-    else if (currentBtn == HIGH && lastButtonState == LOW) {
+    } else if (currentBtn == HIGH && lastButtonState == LOW) {
         if (!buttonHandled) {
             uint32_t duration = now - buttonPressStart;
-            if (duration >= 500 && duration < 1500) {
-                // Medium Press (500ms - 1.5s): Zero Tare
+            if (duration >= 50 && duration < 2000) {
+                // Short Click (< 2s): Zero Tare
                 motoFilter.tareZero();
-                uiDisplay.showTareNotice(motoFilter.getTareRoll(), motoFilter.getTarePitch());
-            } else if (duration >= 40 && duration < 500) {
-                // Short Click (< 500ms): Next Screen
-                uiDisplay.nextScreen();
+                Serial.println("[BUTTON] Zero Tare Salvato in Flash!");
             }
         }
         buttonHandled = true;
@@ -113,44 +129,27 @@ void handleSerial() {
     while (Serial.available()) {
         char c = Serial.read();
         if (c == 's' || c == 'S') {
-            Serial.printf("[STATUS] RadioMode: %s, AP: %s (Clients: %d), Roll: %.1f, Pitch: %.1f, swapXY: %d, invRoll: %d\n",
-                currentRadioMode == RADIO_MODE_DASHBOARD ? "DASHBOARD (HOTSPOT)" : "PISTA (BLE)",
-                WiFi.softAPIP().toString().c_str(),
-                WiFi.softAPgetStationNum(),
+            Serial.printf("[STATUS] Roll: %.1f deg, Pitch: %.1f deg, GLat: %.2f G, GLong: %.2f G, TareRoll: %.1f, TarePitch: %.1f, swapXY: %d, invRoll: %d\n",
                 currentDynamics.rollDeg, currentDynamics.pitchDeg,
+                currentDynamics.gLateral, currentDynamics.gLongitudinal,
+                motoFilter.getTareRoll(), motoFilter.getTarePitch(),
                 motoFilter.getSwapXY(), motoFilter.getInvertRoll());
-        } else if (c == 'm' || c == 'M') {
-            RadioMode nextMode = (currentRadioMode == RADIO_MODE_DASHBOARD) ? RADIO_MODE_RACECHRONO : RADIO_MODE_DASHBOARD;
-            switchRadioMode(nextMode);
-        } else if (c == 'r' || c == 'R') {
-            motoFilter.toggleInvertRoll();
-            Serial.printf("[SERIAL] InvertRoll toggled to: %d\n", motoFilter.getInvertRoll());
-        } else if (c == 'x' || c == 'X') {
-            motoFilter.toggleSwapXY();
-            Serial.printf("[SERIAL] SwapXY toggled to: %d\n", motoFilter.getSwapXY());
         } else if (c == 't' || c == 'T') {
             motoFilter.tareZero();
-            Serial.println("[SERIAL] Tare Zero executed!");
+            Serial.println("[SERIAL] Zero Tare Eseguito!");
+        } else if (c == 'r' || c == 'R') {
+            motoFilter.toggleInvertRoll();
+            Serial.printf("[SERIAL] InvertRoll: %d\n", motoFilter.getInvertRoll());
+        } else if (c == 'x' || c == 'X') {
+            motoFilter.toggleSwapXY();
+            Serial.printf("[SERIAL] SwapXY: %d\n", motoFilter.getSwapXY());
         } else if (c == 'l' || c == 'L') {
             if (sessionLogger.isLogging()) sessionLogger.stopSession();
             else sessionLogger.startSession();
-            Serial.printf("[SERIAL] Datalogger isLogging: %d\n", sessionLogger.isLogging());
-        } else if (c == 'b' || c == 'B') {
-            RadioMode nextMode = (currentRadioMode == RADIO_MODE_DASHBOARD) ? RADIO_MODE_RACECHRONO : RADIO_MODE_DASHBOARD;
-            switchRadioMode(nextMode);
-        } else if (c == 'd' || c == 'D') {
-            uiDisplay.nextScreen();
-            Serial.printf("[SERIAL] Display Screen: %d (%s)\n", (int)uiDisplay.getScreen(), uiDisplay.getScreenName(uiDisplay.getScreen()));
+            Serial.printf("[SERIAL] Datalogger: %s\n", sessionLogger.isLogging() ? "REC" : "STOP");
         } else if (c >= '1' && c <= '9') {
-            int sc = c - '1';
-            if (sc < SCREEN_COUNT) {
-                uiDisplay.setScreen((UIScreenMode)sc);
-                Serial.printf("[SERIAL] Display Screen: %d (%s)\n", sc, uiDisplay.getScreenName((UIScreenMode)sc));
-            }
-        } else if (c == 'a' || c == 'A') {
-            bool nextAc = !uiDisplay.isAutoCycle();
-            uiDisplay.setAutoCycle(nextAc);
-            Serial.printf("[SERIAL] AutoCycle: %s\n", nextAc ? "ATTIVO" : "DISATTIVO");
+            selectedScreenIndex = c - '1';
+            Serial.printf("[SERIAL] Selected Screen: %d\n", selectedScreenIndex);
         }
     }
 }
@@ -158,56 +157,47 @@ void handleSerial() {
 void setup() {
     Serial.begin(115200);
     delay(200);
-    Serial.println("\n==========================================");
-    Serial.println(" Yamaha FZ8 Dynamics Telemetry Computer");
-    Serial.println(" ESP32-C3 + GY-89 (10-DOF) + LCD SSD1283A");
-    Serial.println("==========================================");
+    Serial.println("\n========================================================");
+    Serial.println(" Yamaha FZ8 Dynamics Telemetry Master Unit (Tail Node)");
+    Serial.println(" ESP32-C3 + GY-89 (10-DOF) | Dual Radio: BLE + ESP-NOW");
+    Serial.println("========================================================");
 
-    // Initialize Button & Status LED
+    // Hardware Pins
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     pinMode(STATUS_LED_PIN, OUTPUT);
-    digitalWrite(STATUS_LED_PIN, HIGH); // Turn off onboard LED
+    digitalWrite(STATUS_LED_PIN, LOW); // LED ON at boot
 
-    // 1. Initialize Display UI (SPI)
-    Serial.println("[SYSTEM] Initializing 1.6\" LCD (SSD1283A)...");
-    uiDisplay.begin();
-
-    // 2. Initialize GY-89 I2C Sensors (LSM303D + L3GD20 + BMP180)
-    Serial.println("[SYSTEM] Initializing GY-89 10-DOF Sensors at 400kHz...");
+    // 1. Initialize GY-89 10-DOF I2C Sensors (400 kHz Fast-Mode)
+    Serial.println("[SYSTEM] Inizializzazione GY-89 (LSM303D + L3GD20 + BMP180)...");
     if (!imuSensors.begin()) {
-        Serial.println("[SYSTEM] CRITICAL ERROR: Failed to detect IMU!");
+        Serial.println("[SYSTEM] CRITICAL ERROR: IMU non rilevata!");
     } else {
-        Serial.println("[SYSTEM] IMU Sensors ready and calibrated.");
+        Serial.println("[SYSTEM] GY-89 pronto e calibrato.");
     }
 
-    // 3. Initialize Dynamics Filter & Load Stored Zero Tare from Flash NVS
+    // 2. Initialize Motorcycle Dynamics Filter & Load Tare from NVS
     motoFilter.begin();
 
-    // 4. Initialize LittleFS Flash Datalogger (Compact 20B struct + RAM buffer)
+    // 3. Initialize LittleFS Flash Datalogger
     sessionLogger.begin();
 
-    // 5. Setup BLE Remote Command Handler from Web Smartphone App
+    // 4. Initialize ESP-NOW Broadcaster (50 Hz Wireless link for Cockpit Display)
+    initEspNowBroadcaster();
+
+    // 5. Initialize Bluetooth BLE Telemetry Server (20 Hz for Smartphone Web App / RaceChrono)
     bleTelemetry.setCommandCallback([](const String& cmd) {
         if (cmd.startsWith("SCREEN:")) {
-            int sc = cmd.substring(7).toInt();
-            if (sc >= 0 && sc < SCREEN_COUNT) {
-                uiDisplay.setScreen((UIScreenMode)sc);
-                Serial.printf("[BLE EXEC] Screen changed to: %d (%s)\n", sc, uiDisplay.getScreenName((UIScreenMode)sc));
-            }
+            selectedScreenIndex = cmd.substring(7).toInt();
+            Serial.printf("[BLE EXEC] Screen remota: %d\n", selectedScreenIndex);
         } else if (cmd == "SCREEN_NEXT") {
-            uiDisplay.nextScreen();
-            Serial.printf("[BLE EXEC] Next Screen: %s\n", uiDisplay.getScreenName(uiDisplay.getScreen()));
-        } else if (cmd.startsWith("AUTOCYCLE:")) {
-            bool ac = (cmd.substring(10).toInt() != 0);
-            uiDisplay.setAutoCycle(ac);
-            Serial.printf("[BLE EXEC] AutoCycle: %s\n", ac ? "ON" : "OFF");
+            selectedScreenIndex = (selectedScreenIndex + 1) % 9;
+            Serial.printf("[BLE EXEC] Next Screen: %d\n", selectedScreenIndex);
         } else if (cmd == "TARE") {
             motoFilter.tareZero();
-            uiDisplay.showTareNotice(motoFilter.getTareRoll(), motoFilter.getTarePitch());
-            Serial.println("[BLE EXEC] Zero Tare saved to Flash!");
+            Serial.println("[BLE EXEC] Zero Tare Salvato!");
         } else if (cmd == "RESET_TARE") {
             motoFilter.resetTare();
-            Serial.println("[BLE EXEC] Zero Tare reset to factory 0.0!");
+            Serial.println("[BLE EXEC] Zero Tare resettato a 0.0!");
         } else if (cmd == "INV_ROLL") {
             motoFilter.toggleInvertRoll();
             Serial.printf("[BLE EXEC] InvertRoll: %d\n", motoFilter.getInvertRoll());
@@ -219,28 +209,26 @@ void setup() {
             Serial.printf("[BLE EXEC] InvertAccel: %d\n", motoFilter.getInvertAccel());
         } else if (cmd == "RESET_RECORDS") {
             motoFilter.resetRecords();
-            Serial.println("[BLE EXEC] Session records reset!");
+            Serial.println("[BLE EXEC] Record sessione azzerati!");
         } else if (cmd == "REC_START") {
             sessionLogger.startSession();
-            Serial.println("[BLE EXEC] Datalogger session started!");
+            Serial.println("[BLE EXEC] Datalogger avviato!");
         } else if (cmd == "REC_STOP") {
             sessionLogger.stopSession();
-            Serial.println("[BLE EXEC] Datalogger session stopped!");
+            Serial.println("[BLE EXEC] Datalogger fermato!");
         }
     });
 
-    // 6. Start in BLE Motorcycle Telemetry Mode by default (Zero RF power spikes, 20Hz stream)
-    Serial.println("[SYSTEM] Avvio Modalita Telemetria Bluetooth (BLE 20Hz)...");
     bleTelemetry.begin();
-    uiDisplay.setWifiStatus(false);
-    uiDisplay.setRadioMode(RADIO_MODE_RACECHRONO);
-    webServer.setRadioMode(RADIO_MODE_RACECHRONO);
-    digitalWrite(STATUS_LED_PIN, HIGH); // LED OFF: BLE low power mode
+    digitalWrite(STATUS_LED_PIN, HIGH); // LED OFF: Pronta
 
     lastImuMicros = micros();
-    lastDisplayMillis = millis();
     lastBaroMillis = millis();
     lastLogMillis = millis();
+    lastEspNowMillis = millis();
+    lastHeartbeatMillis = millis();
+    
+    Serial.println("[SYSTEM] *** Master Node operativo a 100Hz! ***\n");
 }
 
 void loop() {
@@ -248,57 +236,52 @@ void loop() {
     uint32_t currentMillis = millis();
 
     // ==========================================================================
-    // 1. HIGH PRIORITY: IMU SAMPLING & MOTORCYCLE FILTER (100 Hz / 10ms)
+    // 1. HIGH PRIORITY: IMU BURST SAMPLING & KINEMATIC GATING FILTER (100 Hz / 10ms)
     // ==========================================================================
     if (currentMicros - lastImuMicros >= (IMU_SAMPLE_PERIOD_MS * 1000)) {
         lastImuMicros = currentMicros;
 
-        // Fast burst read from LSM303D (accel/mag) & L3GD20 (gyro)
         imuSensors.readIMU(rawImu);
-
-        // Run motorcycle-specific kinematic gating filter
         motoFilter.update(rawImu, currentDynamics);
     }
 
     // ==========================================================================
-    // 2. MEDIUM PRIORITY: DISPLAY REFRESH (25 Hz / 40ms)
+    // 2. ESP-NOW WIRELESS BROADCAST TO COCKPIT DISPLAY (50 Hz / 20ms)
     // ==========================================================================
-    if (currentMillis - lastDisplayMillis >= DISPLAY_REFRESH_MS) {
-        lastDisplayMillis = currentMillis;
-        uiDisplay.update(currentDynamics);
+    if (currentMillis - lastEspNowMillis >= 20) {
+        lastEspNowMillis = currentMillis;
+        sendEspNowTelemetry(currentDynamics);
     }
 
     // ==========================================================================
-    // 3. LOW PRIORITY: BMP180 BAROMETER STATE MACHINE (every 500ms)
+    // 3. BLE 20Hz TELEMETRY STREAM TO SMARTPHONE WEB APP / RACECHRONO
+    // ==========================================================================
+    bleTelemetry.update(currentDynamics);
+
+    // ==========================================================================
+    // 4. LOW PRIORITY: BMP180 BAROMETER STATE MACHINE (every 500ms)
     // ==========================================================================
     imuSensors.updateBarometer();
 
     // ==========================================================================
-    // 4. FLASH DATALOGGER (10 Hz / 100ms) & RACECHRONO BLE (20 Hz)
+    // 5. FLASH DATALOGGER (10 Hz / 100ms)
     // ==========================================================================
     if (currentMillis - lastLogMillis >= DATALOGGER_INTERVAL_MS) {
         lastLogMillis = currentMillis;
         sessionLogger.logSample(currentDynamics, currentMillis);
     }
 
-    // Update BLE Telemetry only when in RaceChrono mode
-    if (currentRadioMode == RADIO_MODE_RACECHRONO) {
-        bleTelemetry.update(currentDynamics);
-    }
-
     // ==========================================================================
-    // 5. USER INTERACTION: BUTTON, SERIAL & RADIO/SERVER HANDLING
+    // 6. HEARTBEAT LED & USER INTERACTION (BUTTON & SERIAL)
     // ==========================================================================
     handleSerial();
     handleButton();
 
-    if (currentRadioMode == RADIO_MODE_DASHBOARD && webServer.isRunning()) {
-        webServer.handleClient();
-
-        // Check if Web Dashboard requested a radio switch to Pista (BLE)
-        RadioMode reqMode;
-        if (webServer.checkRadioSwitch(reqMode)) {
-            switchRadioMode(reqMode);
-        }
+    if (currentMillis - lastHeartbeatMillis >= 1000) {
+        lastHeartbeatMillis = currentMillis;
+        // Heartbeat blink (20ms pulse)
+        digitalWrite(STATUS_LED_PIN, LOW);
+        delayMicroseconds(20000);
+        digitalWrite(STATUS_LED_PIN, HIGH);
     }
 }
