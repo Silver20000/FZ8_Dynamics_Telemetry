@@ -360,13 +360,18 @@
         let parts = data.split(',');
 
         if (parts.length >= 7) {
-            let gLat = parseFloat(parts[3]) || 0;
-            let gLong = parseFloat(parts[4]) || 0;
+            let rawGLat = parseFloat(parts[3]) || 0;
+            let rawGLong = parseFloat(parts[4]) || 0;
             let roll = parseFloat(parts[5]) || 0;
             let pitch = parseFloat(parts[6]) || 0;
             let rollRate = parseFloat(parts[7]) || 0;
             let yawRate = parseFloat(parts[8]) || 0;
             let alt = parseFloat(parts[9]) || 0;
+
+            // Rotazione dinamica G-Forces di -90 gradi:
+            // L'accelerazione/frenata diventa l'asse verticale (Y), la forza laterale l'asse orizzontale (X)
+            let gLong = rawGLat;       // In avanti (+) e Frenata (-) in verticale
+            let gLat = -rawGLong;     // Curva SX (-) e Curva DX (+) in orizzontale
 
             updateTelemetry(roll, pitch, gLat, gLong, rollRate, yawRate, alt);
         }
