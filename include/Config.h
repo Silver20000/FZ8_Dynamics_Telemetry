@@ -95,13 +95,14 @@ enum RadioMode {
 #define COMPASS_MAX_YAWRATE_VALID    4.0f   // Max 4 deg/s yaw rate
 
 // ==============================================================================
-// WI-FI CONFIGURATION: SOLO HOTSPOT APERTO AD ALTE PRESTAZIONI (NO STA)
-// Canale 1 dedicato, zero salti di frequenza, Captive Portal DNS integrato
+// WI-FI CONFIGURATION: HOTSPOT AP AD ALTA STABILITA (12 dBm TX POWER)
+// Rete Aperta, Canale 1, Captive Portal DNS, Zero cadute di tensione
 // ==============================================================================
 #define AP_SSID                 "FZ8-Telemetry"
-#define AP_PASSWORD             ""               // Rete APERTA (nessuna password, massima compatibilità smartphone)
+#define AP_PASSWORD             ""               // Rete APERTA per massima compatibilita immediata
 #define AP_IP_ADDR              "192.168.4.1"
 #define AP_CHANNEL              1                // Canale 1 universale
-#define MDNS_HOSTNAME           "fz8"            // Accessibile come http://fz8.local
+#define AP_MAX_TX_POWER         48               // 12.0 dBm (evita cali di tensione USB/LDO)
+#define MDNS_HOSTNAME           "fz8"            // Accessibile come http://fz8.local o http://192.168.4.1
 
 #endif // CONFIG_H

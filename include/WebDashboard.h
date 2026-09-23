@@ -16,7 +16,7 @@
 
 // ==============================================================================
 // SMARTPHONE-NATIVE DEDICATED MOTORCYCLE TELEMETRY APP
-// Pure SoftAP (192.168.4.1), Captive Portal DNS, Zero-Latency 10Hz Polling
+// STA Client Mode - Connects to existing WiFi, serves dashboard on local IP
 // ==============================================================================
 
 static const char PROGMEM DASHBOARD_HTML[] = R"rawliteral(
@@ -1056,45 +1056,30 @@ public:
         _currentRadioMode = RADIO_MODE_DASHBOARD;
         _pendingRadioSwitchTime = 0;
 
-        // Registra listener eventi Wi-Fi
-        static bool eventHandlerRegistered = false;
-        if (!eventHandlerRegistered) {
-            WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
-                switch (event) {
-                    case ARDUINO_EVENT_WIFI_AP_START:
-                        Serial.println("[WIFI-EVENT] >>> SoftAP Avviato e Beaconing ATTIVO! <<<");
-                        break;
-                    case ARDUINO_EVENT_WIFI_AP_STOP:
-                        Serial.println("[WIFI-EVENT] SoftAP Arrestato!");
-                        break;
-                    case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
-                        Serial.println("[WIFI-EVENT] >>> Dispositivo connesso all'Hotspot FZ8! <<<");
-                        break;
-                    case ARDUINO_EVENT_WIFI_AP_STADISCONNECTED:
-                        Serial.println("[WIFI-EVENT] Dispositivo disconnesso dall'Hotspot.");
-                        break;
-                    default:
-                        break;
-                }
-            });
-            eventHandlerRegistered = true;
-        }
-
-        // 1. Avvio SoftAP diretto e affidabile
+        // 1. Configurazione SoftAP ad alta stabilità
         WiFi.persistent(false);
-        WiFi.mode(WIFI_AP_STA);
+        WiFi.mode(WIFI_AP);
+        WiFi.setSleep(false);
+        
+        // Protocollo b/g/n e limitazione potenza TX per evitare cali di tensione USB
+        esp_wifi_set_protocol(WIFI_IF_AP, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+        esp_wifi_set_max_tx_power(AP_MAX_TX_POWER);
+
         const char* pass = (strlen(AP_PASSWORD) >= 8) ? AP_PASSWORD : nullptr;
-        bool apOk = WiFi.softAP(AP_SSID, pass);
-        delay(100);
+        bool apOk = WiFi.softAP(AP_SSID, pass, AP_CHANNEL);
+        delay(150);
 
         IPAddress apIp = WiFi.softAPIP();
-        Serial.printf("[WIFI] SoftAP Avviato (%s): SSID='%s', Sicurezza='%s', IP=%s\n", 
-                      apOk ? "OK" : "FALLITO", AP_SSID, pass ? "WPA2" : "APERTA (NESSUNA PASSWORD)", apIp.toString().c_str());
+        int8_t power = 0;
+        esp_wifi_get_max_tx_power(&power);
+        Serial.printf("[WIFI] SoftAP Avviato (%s): SSID='%s', Sicurezza='%s', IP=%s, TX Power=%.1f dBm\n", 
+                      apOk ? "OK" : "FALLITO", AP_SSID, pass ? "WPA2" : "APERTA (NESSUNA PASSWORD)", 
+                      apIp.toString().c_str(), power * 0.25f);
 
         // 2. Avvia Captive Portal DNS Server (porta 53, risolve qualsiasi dominio su IP AP)
         _dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
         _dnsServer.start(53, "*", apIp);
-        Serial.println("[WIFI] Captive Portal DNS Server attivo su porta 53 (* -> 192.168.4.1)");
+        Serial.println("[WIFI] Captive Portal DNS Server attivo (* -> 192.168.4.1)");
 
         // 3. Avvia mDNS responder (http://fz8.local)
         if (MDNS.begin(MDNS_HOSTNAME)) {
