@@ -1,6 +1,8 @@
-#include <Arduino.h>
+﻿#include <Arduino.h>
 #include <Wire.h>
 #include <SPI.h>
+#include <WiFi.h>
+#include <esp_wifi.h>
 #include "Config.h"
 #include "SensorsGY89.h"
 #include "MotorcycleFilter.h"
@@ -82,7 +84,7 @@ void handleButton() {
     else if (currentBtn == LOW && !buttonHandled) {
         uint32_t duration = now - buttonPressStart;
         if (duration >= 1500) {
-            // Long Press (>= 1.5s): Commutazione Modalità Radio (Wi-Fi vs NimBLE Pista)
+            // Long Press (>= 1.5s): Commutazione Modalita Radio (Wi-Fi vs NimBLE Pista)
             RadioMode nextMode = (currentRadioMode == RADIO_MODE_DASHBOARD) ? RADIO_MODE_RACECHRONO : RADIO_MODE_DASHBOARD;
             switchRadioMode(nextMode);
             buttonHandled = true;
@@ -145,35 +147,6 @@ void handleSerial() {
                 uiDisplay.setScreen((UIScreenMode)sc);
                 Serial.printf("[SERIAL] Display Screen: %d (%s)\n", sc, uiDisplay.getScreenName((UIScreenMode)sc));
             }
-        } else if (c == 'w' || c == 'W') {
-            uint8_t primaryChan = 0;
-            wifi_second_chan_t secondChan;
-            esp_wifi_get_channel(&primaryChan, &secondChan);
-            wifi_config_t conf;
-            esp_wifi_get_config(WIFI_IF_AP, &conf);
-            int8_t maxPwr = 0;
-            esp_wifi_get_max_tx_power(&maxPwr);
-            Serial.printf("[WIFI-DIAG] Mode:%d SSID:'%s' len:%d Pass:'%s' Ch:%d confCh:%d hidden:%d auth:%d maxConn:%d beacon:%d TxPwr:%d maxPwr:%d Clients:%d\n",
-                (int)WiFi.getMode(),
-                (char*)conf.ap.ssid,
-                conf.ap.ssid_len,
-                (char*)conf.ap.password,
-                (int)primaryChan,
-                (int)conf.ap.channel,
-                conf.ap.ssid_hidden,
-                conf.ap.authmode,
-                conf.ap.max_connection,
-                conf.ap.beacon_interval,
-                (int)WiFi.getTxPower(),
-                (int)maxPwr,
-                WiFi.softAPgetStationNum());
-        } else if (c == 'p' || c == 'P') {
-            Serial.println("[WIFI-SCAN] Avvio scansione reti 2.4GHz da ESP32...");
-            int n = WiFi.scanNetworks(false, true); // non-blocking or sync
-            Serial.printf("[WIFI-SCAN] Reti trovate da ESP32: %d\n", n);
-            for (int i = 0; i < n; i++) {
-                Serial.printf("  %d: SSID='%s', Ch=%d, RSSI=%d dBm\n", i+1, WiFi.SSID(i).c_str(), WiFi.channel(i), WiFi.RSSI(i));
-            }
         } else if (c == 'a' || c == 'A') {
             bool nextAc = !uiDisplay.isAutoCycle();
             uiDisplay.setAutoCycle(nextAc);
@@ -213,7 +186,50 @@ void setup() {
     // 4. Initialize LittleFS Flash Datalogger (Compact 20B struct + RAM buffer)
     sessionLogger.begin();
 
-    // 5. Start in BLE Motorcycle Telemetry Mode by default (Zero RF power spikes, 20Hz stream)
+    // 5. Setup BLE Remote Command Handler from Web Smartphone App
+    bleTelemetry.setCommandCallback([](const String& cmd) {
+        if (cmd.startsWith("SCREEN:")) {
+            int sc = cmd.substring(7).toInt();
+            if (sc >= 0 && sc < SCREEN_COUNT) {
+                uiDisplay.setScreen((UIScreenMode)sc);
+                Serial.printf("[BLE EXEC] Screen changed to: %d (%s)\n", sc, uiDisplay.getScreenName((UIScreenMode)sc));
+            }
+        } else if (cmd == "SCREEN_NEXT") {
+            uiDisplay.nextScreen();
+            Serial.printf("[BLE EXEC] Next Screen: %s\n", uiDisplay.getScreenName(uiDisplay.getScreen()));
+        } else if (cmd.startsWith("AUTOCYCLE:")) {
+            bool ac = (cmd.substring(10).toInt() != 0);
+            uiDisplay.setAutoCycle(ac);
+            Serial.printf("[BLE EXEC] AutoCycle: %s\n", ac ? "ON" : "OFF");
+        } else if (cmd == "TARE") {
+            motoFilter.tareZero();
+            uiDisplay.showTareNotice(motoFilter.getTareRoll(), motoFilter.getTarePitch());
+            Serial.println("[BLE EXEC] Zero Tare saved to Flash!");
+        } else if (cmd == "RESET_TARE") {
+            motoFilter.resetTare();
+            Serial.println("[BLE EXEC] Zero Tare reset to factory 0.0!");
+        } else if (cmd == "INV_ROLL") {
+            motoFilter.toggleInvertRoll();
+            Serial.printf("[BLE EXEC] InvertRoll: %d\n", motoFilter.getInvertRoll());
+        } else if (cmd == "SWAP_XY") {
+            motoFilter.toggleSwapXY();
+            Serial.printf("[BLE EXEC] SwapXY: %d\n", motoFilter.getSwapXY());
+        } else if (cmd == "INV_ACCEL") {
+            motoFilter.toggleInvertAccel();
+            Serial.printf("[BLE EXEC] InvertAccel: %d\n", motoFilter.getInvertAccel());
+        } else if (cmd == "RESET_RECORDS") {
+            motoFilter.resetRecords();
+            Serial.println("[BLE EXEC] Session records reset!");
+        } else if (cmd == "REC_START") {
+            sessionLogger.startSession();
+            Serial.println("[BLE EXEC] Datalogger session started!");
+        } else if (cmd == "REC_STOP") {
+            sessionLogger.stopSession();
+            Serial.println("[BLE EXEC] Datalogger session stopped!");
+        }
+    });
+
+    // 6. Start in BLE Motorcycle Telemetry Mode by default (Zero RF power spikes, 20Hz stream)
     Serial.println("[SYSTEM] Avvio Modalita Telemetria Bluetooth (BLE 20Hz)...");
     bleTelemetry.begin();
     uiDisplay.setWifiStatus(false);

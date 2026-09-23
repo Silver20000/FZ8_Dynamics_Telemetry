@@ -29,26 +29,28 @@
             background: radial-gradient(circle at 50% 0%, #162032 0%, var(--bg-main) 100%);
             color: var(--text-main);
             min-height: 100vh;
-            padding: 12px;
+            padding: 10px 12px 20px 12px;
             display: flex;
             flex-direction: column;
             align-items: center;
         }
-        .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 12px; }
+        .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 10px; }
+        
+        /* Header */
         header {
             display: flex; justify-content: space-between; align-items: center;
             background: var(--bg-card-glass); backdrop-filter: blur(10px);
-            border: 1px solid var(--border-card); border-radius: 14px; padding: 10px 14px;
+            border: 1px solid var(--border-card); border-radius: 14px; padding: 8px 12px;
         }
         .logo-box { display: flex; align-items: center; gap: 8px; }
         .logo-badge {
             background: linear-gradient(135deg, var(--yamaha-blue), var(--yamaha-cyan));
             color: white; font-weight: 900; font-size: 11px; padding: 3px 7px; border-radius: 6px;
         }
-        .app-title { font-size: 15px; font-weight: 700; }
+        .app-title { font-size: 14px; font-weight: 700; }
         .conn-btn {
             background: linear-gradient(135deg, var(--yamaha-blue), #0047ba);
-            color: white; border: none; border-radius: 10px; padding: 7px 14px; font-size: 13px;
+            color: white; border: none; border-radius: 10px; padding: 6px 12px; font-size: 12px;
             font-weight: 700; display: flex; align-items: center; gap: 6px; cursor: pointer;
             box-shadow: 0 4px 12px rgba(0, 102, 255, 0.35);
         }
@@ -59,71 +61,163 @@
             70% { box-shadow: 0 0 0 10px rgba(255, 23, 68, 0); }
             100% { box-shadow: 0 0 0 0 rgba(255, 23, 68, 0); }
         }
+
+        /* Navigation Tabs */
+        .tab-bar {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            background: var(--bg-card-glass);
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            padding: 4px;
+            gap: 4px;
+        }
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            font-weight: 700;
+            font-size: 12px;
+            padding: 8px 4px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .tab-btn.active {
+            background: rgba(0, 102, 255, 0.25);
+            color: var(--yamaha-cyan);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+        }
+
+        .tab-content { display: none; flex-direction: column; gap: 10px; width: 100%; }
+        .tab-content.active { display: flex; }
+
+        /* Card Styles */
         .card {
             background: var(--bg-card-glass); backdrop-filter: blur(10px);
-            border: 1px solid var(--border-card); border-radius: 18px; padding: 14px;
+            border: 1px solid var(--border-card); border-radius: 16px; padding: 12px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
         }
         .lean-card { display: flex; flex-direction: column; align-items: center; position: relative; }
         .lean-header {
-            width: 100%; display: flex; justify-content: space-between;
-            font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px;
+            width: 100%; display: flex; justify-content: space-between; align-items: center;
+            font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px;
         }
-        .gauge-svg-wrap { width: 100%; max-width: 300px; height: 170px; position: relative; }
-        .lean-value-center { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); text-align: center; }
+        .gauge-svg-wrap { width: 100%; max-width: 280px; height: 160px; position: relative; }
+        .lean-value-center { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); text-align: center; }
         .lean-deg-big {
-            font-size: 52px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums;
+            font-size: 48px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums;
             background: linear-gradient(180deg, #ffffff 40%, var(--yamaha-cyan) 100%);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
-        .lean-dir-badge { font-size: 13px; font-weight: 800; color: var(--text-dim); }
+        .lean-dir-badge { font-size: 12px; font-weight: 800; color: var(--text-dim); }
         .max-lean-container {
             width: 100%; display: flex; justify-content: space-between; align-items: center;
-            margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-card);
+            margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-card);
         }
-        .max-item { display: flex; flex-direction: column; gap: 2px; }
-        .max-label { font-size: 11px; color: var(--text-dim); font-weight: 600; }
-        .max-val { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .max-item { display: flex; flex-direction: column; gap: 1px; }
+        .max-label { font-size: 10px; color: var(--text-dim); font-weight: 600; }
+        .max-val { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
         .max-val.left { color: var(--yamaha-cyan); }
         .max-val.right { color: var(--accent-orange); }
         .btn-reset-max {
             background: rgba(255, 255, 255, 0.08); border: 1px solid var(--border-card);
-            color: var(--text-dim); border-radius: 8px; padding: 5px 10px; font-size: 11px; font-weight: 700; cursor: pointer;
+            color: var(--text-dim); border-radius: 8px; padding: 4px 8px; font-size: 10px; font-weight: 700; cursor: pointer;
         }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+        /* 2-col Grid */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .gmeter-wrap { display: flex; flex-direction: column; align-items: center; }
         .canvas-gmeter {
-            width: 130px; height: 130px; border-radius: 50%;
+            width: 125px; height: 125px; border-radius: 50%;
             background: radial-gradient(circle, #101622 0%, #080c14 100%); border: 1px solid var(--border-card);
         }
-        .stat-grid { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; }
-        .stat-box { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 8px 10px; }
-        .stat-label { font-size: 10px; color: var(--text-dim); font-weight: 700; text-transform: uppercase; }
-        .stat-num { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 1px; }
-        .pitch-bar-wrap { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
-        .pitch-track { flex: 1; height: 6px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; position: relative; overflow: hidden; }
+        .stat-grid { display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }
+        .stat-box { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 6px 8px; }
+        .stat-label { font-size: 9px; color: var(--text-dim); font-weight: 700; text-transform: uppercase; }
+        .stat-num { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 1px; }
+        .pitch-bar-wrap { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+        .pitch-track { flex: 1; height: 5px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; position: relative; overflow: hidden; }
         .pitch-fill { position: absolute; height: 100%; top: 0; left: 50%; width: 0%; background: var(--yamaha-cyan); transition: width 0.05s ease, left 0.05s ease; }
-        .graph-card { display: flex; flex-direction: column; gap: 6px; }
-        .graph-canvas { width: 100%; height: 90px; background: #080c14; border-radius: 10px; border: 1px solid var(--border-card); }
+        
+        .graph-card { display: flex; flex-direction: column; gap: 4px; }
+        .graph-canvas { width: 100%; height: 80px; background: #080c14; border-radius: 8px; border: 1px solid var(--border-card); }
+        
         .actions-bar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
         .action-btn {
             background: rgba(255, 255, 255, 0.06); border: 1px solid var(--border-card);
-            color: var(--text-main); border-radius: 12px; padding: 10px 6px; font-size: 12px;
-            font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer;
+            color: var(--text-main); border-radius: 12px; padding: 9px 4px; font-size: 11px;
+            font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer;
         }
         .action-btn:active { background: rgba(255, 255, 255, 0.15); }
         .action-btn.active { background: rgba(255, 23, 68, 0.2); border-color: var(--accent-red); color: var(--accent-red); }
-        .corners-card { display: flex; flex-direction: column; gap: 8px; }
-        .corner-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+
+        .corner-list { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
         .corner-pill {
             background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-card);
-            border-radius: 10px; padding: 6px 10px; min-width: 80px; flex-shrink: 0; display: flex; flex-direction: column; gap: 1px;
+            border-radius: 8px; padding: 5px 8px; min-width: 75px; flex-shrink: 0; display: flex; flex-direction: column; gap: 1px;
         }
-        .corner-dir { font-size: 10px; font-weight: 800; }
+        .corner-dir { font-size: 9px; font-weight: 800; }
         .corner-dir.L { color: var(--yamaha-cyan); }
         .corner-dir.R { color: var(--accent-orange); }
-        .corner-max { font-size: 15px; font-weight: 800; }
-        .corner-rate { font-size: 10px; color: var(--text-dim); }
+        .corner-max { font-size: 14px; font-weight: 800; }
+        .corner-rate { font-size: 9px; color: var(--text-dim); }
+
+        /* Settings Grid & Screen Grid */
+        .screen-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .screen-card-btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            padding: 10px;
+            text-align: left;
+            color: var(--text-main);
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            transition: all 0.2s ease;
+        }
+        .screen-card-btn:active { background: rgba(0, 102, 255, 0.2); }
+        .screen-card-btn.active {
+            border-color: var(--yamaha-cyan);
+            background: rgba(0, 212, 255, 0.15);
+        }
+        .screen-title { font-size: 12px; font-weight: 800; color: var(--yamaha-cyan); }
+        .screen-desc { font-size: 10px; color: var(--text-dim); }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .setting-row:last-child { border-bottom: none; }
+        .setting-info { display: flex; flex-direction: column; gap: 2px; }
+        .setting-name { font-size: 13px; font-weight: 700; }
+        .setting-hint { font-size: 10px; color: var(--text-dim); }
+
+        .toggle-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border-card);
+            color: var(--text-main);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .toggle-btn.on {
+            background: linear-gradient(135deg, var(--yamaha-blue), var(--yamaha-cyan));
+            color: white;
+            border: none;
+        }
+
         .alert-flash {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             border: 6px solid var(--accent-red); pointer-events: none; opacity: 0; transition: opacity 0.1s ease; z-index: 999;
@@ -136,6 +230,7 @@
 <div class="alert-flash" id="alertFlash"></div>
 
 <div class="container">
+    <!-- Header -->
     <header>
         <div class="logo-box">
             <span class="logo-badge">FZ8</span>
@@ -149,128 +244,268 @@
         </button>
     </header>
 
-    <div class="card lean-card">
-        <div class="lean-header">
-            <span>Angolo di Piega</span>
-            <span id="lblRollRate" style="color:var(--yamaha-cyan)">0 °/s</span>
-        </div>
-
-        <div class="gauge-svg-wrap">
-            <svg viewBox="0 0 300 180" style="width:100%;height:100%;">
-                <path d="M 30 150 A 120 120 0 0 1 270 150" fill="none" stroke="#162032" stroke-width="14" stroke-linecap="round"/>
-                <path d="M 120 38 A 120 120 0 0 1 180 38" fill="none" stroke="#00e676" stroke-width="6" opacity="0.4"/>
-                <circle cx="56" cy="74" r="4" fill="#ff1744"/>
-                <circle cx="244" cy="74" r="4" fill="#ff1744"/>
-                <line id="svgNeedle" x1="150" y1="150" x2="150" y2="35" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
-                <circle cx="150" cy="150" r="8" fill="#ffffff"/>
-            </svg>
-
-            <div class="lean-value-center">
-                <div class="lean-deg-big" id="lblRollDeg">0.0°</div>
-                <div class="lean-dir-badge" id="lblRollDir">DIRITTO</div>
-            </div>
-        </div>
-
-        <div class="max-lean-container">
-            <div class="max-item">
-                <span class="max-label">MAX SINISTRA</span>
-                <span class="max-val left" id="lblMaxL">0.0°</span>
-            </div>
-            <button class="btn-reset-max" onclick="resetMaxStats()">RESET RECORD</button>
-            <div class="max-item" style="align-items:flex-end;">
-                <span class="max-label">MAX DESTRA</span>
-                <span class="max-val right" id="lblMaxR">0.0°</span>
-            </div>
-        </div>
+    <!-- Navigation Tabs -->
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('tabLive', this)">📊 Live</button>
+        <button class="tab-btn" onclick="switchTab('tabScreens', this)">📺 Schermi LCD</button>
+        <button class="tab-btn" onclick="switchTab('tabSettings', this)">⚙️ Impostazioni</button>
     </div>
 
-    <div class="grid-2">
-        <div class="card gmeter-wrap">
-            <div class="lean-header" style="margin-bottom:8px;">
-                <span>G-Meter 2D</span>
-                <span id="lblTotalG" style="color:var(--text-main);">1.00 G</span>
+    <!-- TAB 1: LIVE TELEMETRY -->
+    <div id="tabLive" class="tab-content active">
+        <!-- Main Lean Angle Dial -->
+        <div class="card lean-card">
+            <div class="lean-header">
+                <span>Angolo di Piega</span>
+                <span id="lblRollRate" style="color:var(--yamaha-cyan)">0 °/s</span>
             </div>
-            <canvas id="canvasGMeter" class="canvas-gmeter" width="260" height="260"></canvas>
-            <div style="display:flex;justify-content:space-between;width:100%;font-size:10px;color:var(--text-dim);margin-top:6px;font-weight:700;">
-                <span id="lblMaxBrake">BRK: 0.00 G</span>
-                <span id="lblMaxAccel">ACC: 0.00 G</span>
-            </div>
-        </div>
 
-        <div class="card stat-grid">
-            <div class="stat-box">
-                <span class="stat-label">Frenata / Accel</span>
-                <div class="stat-num" id="lblGLong">0.00 G</div>
-            </div>
-            <div class="stat-box">
-                <span class="stat-label">Beccheggio Forcella</span>
-                <div class="stat-num" id="lblPitch">0.0°</div>
-                <div class="pitch-bar-wrap">
-                    <div class="pitch-track">
-                        <div class="pitch-fill" id="pitchFill"></div>
-                    </div>
+            <div class="gauge-svg-wrap">
+                <svg viewBox="0 0 300 180" style="width:100%;height:100%;">
+                    <path d="M 30 150 A 120 120 0 0 1 270 150" fill="none" stroke="#162032" stroke-width="14" stroke-linecap="round"/>
+                    <path d="M 120 38 A 120 120 0 0 1 180 38" fill="none" stroke="#00e676" stroke-width="6" opacity="0.4"/>
+                    <circle cx="56" cy="74" r="4" fill="#ff1744"/>
+                    <circle cx="244" cy="74" r="4" fill="#ff1744"/>
+                    <line id="svgNeedle" x1="150" y1="150" x2="150" y2="35" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+                    <circle cx="150" cy="150" r="8" fill="#ffffff"/>
+                </svg>
+
+                <div class="lean-value-center">
+                    <div class="lean-deg-big" id="lblRollDeg">0.0°</div>
+                    <div class="lean-dir-badge" id="lblRollDir">DIRITTO</div>
                 </div>
             </div>
-            <div class="stat-box">
-                <span class="stat-label">Quota Barometrica</span>
-                <div class="stat-num" id="lblAlt" style="color:var(--yamaha-cyan);">-- m</div>
+
+            <div class="max-lean-container">
+                <div class="max-item">
+                    <span class="max-label">MAX SINISTRA</span>
+                    <span class="max-val left" id="lblMaxL">0.0°</span>
+                </div>
+                <button class="btn-reset-max" onclick="resetMaxStats()">RESET RECORD</button>
+                <div class="max-item" style="align-items:flex-end;">
+                    <span class="max-label">MAX DESTRA</span>
+                    <span class="max-val right" id="lblMaxR">0.0°</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- G-Meter and Pitch Grid -->
+        <div class="grid-2">
+            <div class="card gmeter-wrap">
+                <div class="lean-header" style="margin-bottom:6px;">
+                    <span>G-Meter 2D</span>
+                    <span id="lblTotalG" style="color:var(--text-main);">1.00 G</span>
+                </div>
+                <canvas id="canvasGMeter" class="canvas-gmeter" width="250" height="250"></canvas>
+                <div style="display:flex;justify-content:space-between;width:100%;font-size:9px;color:var(--text-dim);margin-top:4px;font-weight:700;">
+                    <span id="lblMaxBrake">BRK: 0.00 G</span>
+                    <span id="lblMaxAccel">ACC: 0.00 G</span>
+                </div>
+            </div>
+
+            <div class="card stat-grid">
+                <div class="stat-box">
+                    <span class="stat-label">Frenata / Accel</span>
+                    <div class="stat-num" id="lblGLong">0.00 G</div>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Beccheggio Forcella</span>
+                    <div class="stat-num" id="lblPitch">0.0°</div>
+                    <div class="pitch-bar-wrap">
+                        <div class="pitch-track">
+                            <div class="pitch-fill" id="pitchFill"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Quota Barometrica</span>
+                    <div class="stat-num" id="lblAlt" style="color:var(--yamaha-cyan);">-- m</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-time Rolling Graph -->
+        <div class="card graph-card">
+            <div class="lean-header">
+                <span>Grafico Live (60 fps)</span>
+                <span style="font-size:9px;color:var(--text-dim);">● Piega  ● G-Long</span>
+            </div>
+            <canvas id="canvasGraph" class="graph-canvas" width="600" height="160"></canvas>
+        </div>
+
+        <!-- Corner Analyzer -->
+        <div class="card">
+            <div class="lean-header" style="margin-bottom:6px;">
+                <span>Ultime Curve Analizzate</span>
+                <span id="lblCornerCount" style="color:var(--yamaha-cyan)">0 curve</span>
+            </div>
+            <div class="corner-list" id="cornerList">
+                <div style="font-size:11px;color:var(--text-dim);padding:6px 0;">In attesa delle prime curve...</div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="actions-bar">
+            <button class="action-btn" id="btnRecord" onclick="toggleRecording()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="12" r="8"/>
+                </svg>
+                <span id="lblRecText">REC Sessione</span>
+            </button>
+            <button class="action-btn" onclick="exportCsv()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                </svg>
+                <span>Scarica CSV</span>
+            </button>
+            <button class="action-btn" onclick="sendBleCmd('TARE')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg>
+                <span>Azzera Tare</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- TAB 2: SCHERMATE DISPLAY LCD 1.6" -->
+    <div id="tabScreens" class="tab-content">
+        <div class="card">
+            <div class="lean-header" style="margin-bottom:10px;">
+                <span>Seleziona Schermata Display LCD</span>
+                <button class="btn-reset-max" onclick="sendBleCmd('SCREEN_NEXT')">AVANTI ⏩</button>
+            </div>
+            <div class="screen-grid">
+                <button class="screen-card-btn active" onclick="setScreen(0, this)">
+                    <span class="screen-title">1. Racing Analog Dial</span>
+                    <span class="screen-desc">Quadrante ad arco con lancetta e picchi SX/DX</span>
+                </button>
+                <button class="screen-card-btn" onclick="setScreen(1, this)">
+                    <span class="screen-title">2. MotoGP Clean HUD</span>
+                    <span class="screen-desc">Numero gigante con barre LED laterali</span>
+                </button>
+                <button class="screen-card-btn" onclick="setScreen(2, this)">
+                    <span class="screen-title">3. G-Meter Radar 2D</span>
+                    <span class="screen-desc">Cerchio di attrito G-G e decelerazione</span>
+                </button>
+                <button class="screen-card-btn" onclick="setScreen(3, this)">
+                    <span class="screen-title">4. Corner Analyzer</span>
+                    <span class="screen-desc">Analisi curve live, apex e velocità rollio</span>
+                </button>
+                <button class="screen-card-btn" onclick="setScreen(4, this)">
+                    <span class="screen-title">5. Mountain Tour D+</span>
+                    <span class="screen-desc">Bussola, altimetro e dislivello accumulato</span>
+                </button>
+                <button class="screen-card-btn" onclick="setScreen(5, this)">
+                    <span class="screen-title">6. Assetto & Forcella</span>
+                    <span class="screen-desc">Beccheggio, wheelie e stoppie detector</span>
+                </button>
+                <button class="screen-card-btn" onclick="setScreen(6, this)">
+                    <span class="screen-title">7. Orizzonte Artificiale</span>
+                    <span class="screen-desc">Grafica aeronautica HUD assetto di volo/guida</span>
+                </button>
+                <button class="screen-card-btn" onclick="setScreen(7, this)">
+                    <span class="screen-title">8. Minimal Race HUD</span>
+                    <span class="screen-desc">Numero ad altissimo contrasto per pieno sole</span>
+                </button>
+                <button class="screen-card-btn" onclick="setScreen(8, this)" style="grid-column: span 2;">
+                    <span class="screen-title">9. Riepilogo Sessione Stats</span>
+                    <span class="screen-desc">Tutti i record max della sessione e durata</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Auto-Cycle Schermate</span>
+                    <span class="setting-hint">Ruota automaticamente le schermate ogni 5 secondi</span>
+                </div>
+                <button class="toggle-btn" id="btnAutoCycle" onclick="toggleAutoCycle()">OFF</button>
             </div>
         </div>
     </div>
 
-    <div class="card graph-card">
-        <div class="lean-header">
-            <span>Grafico Live (60 fps)</span>
-            <span style="font-size:10px;color:var(--text-dim);">● Piega  ● G-Long</span>
-        </div>
-        <canvas id="canvasGraph" class="graph-canvas" width="600" height="180"></canvas>
-    </div>
+    <!-- TAB 3: CALIBRAZIONE & IMPOSTAZIONI -->
+    <div id="tabSettings" class="tab-content">
+        <div class="card">
+            <div class="lean-header" style="margin-bottom:8px;">
+                <span>Calibrazione IMU & Montaggio</span>
+            </div>
+            
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Zero Tare Moto</span>
+                    <span class="setting-hint">Salva l'assetto corrente a riposo nella Flash</span>
+                </div>
+                <button class="toggle-btn on" onclick="sendBleCmd('TARE')">SALVA ZERO</button>
+            </div>
 
-    <div class="card corners-card">
-        <div class="lean-header">
-            <span>Ultime Curve Analizzate</span>
-            <span id="lblCornerCount" style="color:var(--yamaha-cyan)">0 curve</span>
-        </div>
-        <div class="corner-list" id="cornerList">
-            <div style="font-size:11px;color:var(--text-dim);padding:8px 0;">In attesa delle prime curve...</div>
-        </div>
-    </div>
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Ripristina Tare Fabbrica</span>
+                    <span class="setting-hint">Riporta lo zero a 0.0°</span>
+                </div>
+                <button class="toggle-btn" onclick="sendBleCmd('RESET_TARE')">RESET</button>
+            </div>
 
-    <div class="actions-bar">
-        <button class="action-btn" id="btnRecord" onclick="toggleRecording()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="12" r="8"/>
-            </svg>
-            <span id="lblRecText">REC Sessione</span>
-        </button>
-        <button class="action-btn" onclick="exportCsv()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-            </svg>
-            <span>Scarica CSV</span>
-        </button>
-        <button class="action-btn" onclick="tareZero()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-            </svg>
-            <span>Azzera Tare</span>
-        </button>
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Inverti Rollio (SX / DX)</span>
+                    <span class="setting-hint">Inverte la direzione visiva della piega</span>
+                </div>
+                <button class="toggle-btn" onclick="sendBleCmd('INV_ROLL')">INVERTI</button>
+            </div>
+
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Scambia Assi XY IMU</span>
+                    <span class="setting-hint">Ruota l'orientamento di montaggio a 90°</span>
+                </div>
+                <button class="toggle-btn" onclick="sendBleCmd('SWAP_XY')">SCAMBIA XY</button>
+            </div>
+
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Inverti Accelerazione (ACC/BRK)</span>
+                    <span class="setting-hint">Inverte il verso di marcia avanti/dietro</span>
+                </div>
+                <button class="toggle-btn" onclick="sendBleCmd('INV_ACCEL')">INVERTI ACC</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="lean-header" style="margin-bottom:8px;">
+                <span>Orientamento G-Meter App</span>
+            </div>
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Rotazione G-Meter</span>
+                    <span class="setting-hint" id="lblGAlign">Attuale: Ruotato -90° (Standard Moto)</span>
+                </div>
+                <button class="toggle-btn on" id="btnGRot" onclick="cycleGRotation()">RUOTA 90°</button>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
     const SERVICE_UUID = "00001ff8-0000-1000-8000-00805f9b34fb";
     const CHAR_DATA_UUID = "00000002-0000-1000-8000-00805f9b34fb";
+    const CHAR_CMD_UUID = "00000001-0000-1000-8000-00805f9b34fb";
 
     let bleDevice = null;
     let bleServer = null;
     let bleChar = null;
+    let bleCmdChar = null;
     let isConnected = false;
 
     let state = {
         roll: 0, pitch: 0, gLat: 0, gLong: 0, rollRate: 0, yawRate: 0, altitude: 0,
         maxRollL: 0, maxRollR: 0, maxBrake: 0, maxAccel: 0, warningThreshold: 48.0
     };
+
+    let gRotationMode = 1; // 1 = -90 deg (vertical accel)
+    let autoCycleState = false;
 
     let isRecording = false;
     let recordedData = [];
@@ -284,15 +519,15 @@
     const MAX_GRAPH_PTS = 120;
     const gTrail = [];
 
-    let wakeLock = null;
-    async function requestWakeLock() {
-        try {
-            if ('wakeLock' in navigator) {
-                wakeLock = await navigator.wakeLock.request('screen');
-            }
-        } catch(e) {}
+    // Tab Switching
+    function switchTab(tabId, btn) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        btn.classList.add('active');
     }
 
+    // Bluetooth Connection
     async function toggleBluetooth() {
         if (isConnected) {
             if (bleDevice && bleDevice.gatt.connected) {
@@ -318,13 +553,17 @@
             const service = await bleServer.getPrimaryService(SERVICE_UUID);
             bleChar = await service.getCharacteristic(CHAR_DATA_UUID);
 
+            try {
+                bleCmdChar = await service.getCharacteristic(CHAR_CMD_UUID);
+            } catch(e) { console.warn("Cmd characteristic optional:", e); }
+
             await bleChar.startNotifications();
             bleChar.addEventListener('characteristicvaluechanged', handleBleData);
 
             isConnected = true;
             document.getElementById("btnConnect").classList.add("connected");
             document.getElementById("btnConnectText").innerText = "FZ8 Connesso";
-            requestWakeLock();
+            if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
         } catch (err) {
             console.error("BLE Error:", err);
             onDisconnected();
@@ -337,6 +576,42 @@
         document.getElementById("btnConnectText").innerText = "Connetti BLE";
     }
 
+    // Send Remote Command over BLE to ESP32
+    async function sendBleCmd(cmdStr) {
+        if (!isConnected || !bleCmdChar) {
+            console.log("Mock cmd (not connected):", cmdStr);
+            return;
+        }
+        try {
+            const encoder = new TextEncoder();
+            await bleCmdChar.writeValue(encoder.encode(cmdStr));
+            console.log("Sent BLE Cmd:", cmdStr);
+        } catch(e) {
+            console.error("Failed to send BLE command:", e);
+        }
+    }
+
+    function setScreen(screenIndex, btn) {
+        document.querySelectorAll('.screen-card-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        sendBleCmd(`SCREEN:${screenIndex}`);
+    }
+
+    function toggleAutoCycle() {
+        autoCycleState = !autoCycleState;
+        const btn = document.getElementById("btnAutoCycle");
+        btn.innerText = autoCycleState ? "ATTIVO" : "OFF";
+        btn.classList.toggle("on", autoCycleState);
+        sendBleCmd(`AUTOCYCLE:${autoCycleState ? 1 : 0}`);
+    }
+
+    function cycleGRotation() {
+        gRotationMode = (gRotationMode + 1) % 4;
+        const labels = ["0° (Normale)", "Ruotato -90° (Moto)", "180° (Invertito)", "Ruotato +90°"];
+        document.getElementById("lblGAlign").innerText = "Attuale: " + labels[gRotationMode];
+    }
+
+    // Data Parsing
     const decoder = new TextDecoder();
     let rxBuffer = "";
 
@@ -368,10 +643,19 @@
             let yawRate = parseFloat(parts[8]) || 0;
             let alt = parseFloat(parts[9]) || 0;
 
-            // Rotazione dinamica G-Forces di -90 gradi:
-            // L'accelerazione/frenata diventa l'asse verticale (Y), la forza laterale l'asse orizzontale (X)
-            let gLong = rawGLat;       // In avanti (+) e Frenata (-) in verticale
-            let gLat = -rawGLong;     // Curva SX (-) e Curva DX (+) in orizzontale
+            let gLat = rawGLat;
+            let gLong = rawGLong;
+
+            if (gRotationMode === 1) { // -90 deg
+                gLong = rawGLat;
+                gLat = -rawGLong;
+            } else if (gRotationMode === 2) { // 180 deg
+                gLong = -rawGLong;
+                gLat = -rawGLat;
+            } else if (gRotationMode === 3) { // +90 deg
+                gLong = -rawGLat;
+                gLat = rawGLong;
+            }
 
             updateTelemetry(roll, pitch, gLat, gLong, rollRate, yawRate, alt);
         }
@@ -448,7 +732,7 @@
 
         list.innerHTML = cornerHistory.map(c => `
             <div class="corner-pill">
-                <div class="corner-dir ${c.isLeft ? 'L' : 'R'}">${c.isLeft ? '◄ SINISTRA' : 'DESTRA ►'}</div>
+                <div class="corner-dir ${c.isLeft ? 'L' : 'R'}">${c.isLeft ? '◄ SX' : 'DX ►'}</div>
                 <div class="corner-max">${c.peakRoll}°</div>
                 <div class="corner-rate">${c.peakRate}°/s • ${c.dur}s</div>
             </div>
@@ -471,7 +755,7 @@
         const alertEl = document.getElementById("alertFlash");
         if (absRoll >= state.warningThreshold) {
             alertEl.classList.add("active");
-            if (navigator.vibrate) navigator.vibrate(50);
+            if (navigator.vibrate) navigator.vibrate(40);
         } else {
             alertEl.classList.remove("active");
         }
@@ -511,11 +795,7 @@
 
     function resetMaxStats() {
         state.maxRollL = 0; state.maxRollR = 0; state.maxBrake = 0; state.maxAccel = 0;
-        renderUI();
-    }
-
-    function tareZero() {
-        state.roll = 0; state.pitch = 0;
+        sendBleCmd('RESET_RECORDS');
         renderUI();
     }
 
@@ -529,9 +809,11 @@
             recStartTime = Date.now();
             btn.classList.add("recording");
             lbl.innerText = "STOP REC";
+            sendBleCmd('REC_START');
         } else {
             btn.classList.remove("recording");
             lbl.innerText = "REC Sessione";
+            sendBleCmd('REC_STOP');
             if (recordedData.length > 0) exportCsv();
         }
     }
@@ -557,11 +839,12 @@
         document.body.removeChild(a);
     }
 
+    // Canvas G-Meter
     const canvasG = document.getElementById("canvasGMeter");
     const ctxG = canvasG.getContext("2d");
 
     function drawGMeter() {
-        const w = canvasG.width; const h = canvasG.height; const cx = w / 2; const cy = h / 2; const r = w / 2 - 12;
+        const w = canvasG.width; const h = canvasG.height; const cx = w / 2; const cy = h / 2; const r = w / 2 - 10;
         ctxG.clearRect(0, 0, w, h);
 
         ctxG.strokeStyle = "rgba(255,255,255,0.12)"; ctxG.lineWidth = 1;
@@ -570,8 +853,8 @@
         ctxG.beginPath(); ctxG.arc(cx, cy, r, 0, Math.PI * 2); ctxG.stroke();
 
         ctxG.beginPath();
-        ctxG.moveTo(cx, 10); ctxG.lineTo(cx, h - 10);
-        ctxG.moveTo(10, cy); ctxG.lineTo(w - 10, cy);
+        ctxG.moveTo(cx, 8); ctxG.lineTo(cx, h - 8);
+        ctxG.moveTo(8, cy); ctxG.lineTo(w - 8, cy);
         ctxG.stroke();
 
         for (let i = 0; i < gTrail.length; i++) {
@@ -588,11 +871,12 @@
         liveX = Math.max(cx - r, Math.min(cx + r, liveX));
         liveY = Math.max(cy - r, Math.min(cy + r, liveY));
 
-        ctxG.fillStyle = "#ff1744"; ctxG.beginPath(); ctxG.arc(liveX, liveY, 7, 0, Math.PI * 2); ctxG.fill();
+        ctxG.fillStyle = "#ff1744"; ctxG.beginPath(); ctxG.arc(liveX, liveY, 6, 0, Math.PI * 2); ctxG.fill();
         requestAnimationFrame(drawGMeter);
     }
     requestAnimationFrame(drawGMeter);
 
+    // Canvas Live Graph
     const canvasGraph = document.getElementById("canvasGraph");
     const ctxGr = canvasGraph.getContext("2d");
 
@@ -606,19 +890,19 @@
         if (graphHistory.length < 2) { requestAnimationFrame(drawGraph); return; }
 
         const step = w / (MAX_GRAPH_PTS - 1);
-        ctxGr.strokeStyle = "#00d4ff"; ctxGr.lineWidth = 2.5; ctxGr.beginPath();
+        ctxGr.strokeStyle = "#00d4ff"; ctxGr.lineWidth = 2.2; ctxGr.beginPath();
         for (let i = 0; i < graphHistory.length; i++) {
             let x = i * step;
-            let y = cy + (graphHistory[i].roll / 60) * (cy - 10);
+            let y = cy + (graphHistory[i].roll / 60) * (cy - 8);
             if (i === 0) ctxGr.moveTo(x, y);
             else ctxGr.lineTo(x, y);
         }
         ctxGr.stroke();
 
-        ctxGr.strokeStyle = "#ff9100"; ctxGr.lineWidth = 1.8; ctxGr.beginPath();
+        ctxGr.strokeStyle = "#ff9100"; ctxGr.lineWidth = 1.6; ctxGr.beginPath();
         for (let i = 0; i < graphHistory.length; i++) {
             let x = i * step;
-            let y = cy - (graphHistory[i].gLong / 1.5) * (cy - 10);
+            let y = cy - (graphHistory[i].gLong / 1.5) * (cy - 8);
             if (i === 0) ctxGr.moveTo(x, y);
             else ctxGr.lineTo(x, y);
         }

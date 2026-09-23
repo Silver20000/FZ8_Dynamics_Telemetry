@@ -1,28 +1,54 @@
-#ifndef BLUETOOTH_TELEMETRY_H
+﻿#ifndef BLUETOOTH_TELEMETRY_H
 #define BLUETOOTH_TELEMETRY_H
 
 #include <Arduino.h>
 #include <NimBLEDevice.h>
+#include <functional>
 #include "Config.h"
 #include "MotorcycleFilter.h"
 
 // RaceChrono DIY Service and Characteristic UUIDs
 #define RACECHRONO_SERVICE_UUID        "00001ff8-0000-1000-8000-00805f9b34fb"
 #define RACECHRONO_CHARACTERISTIC_UUID "00000002-0000-1000-8000-00805f9b34fb"
+#define FZ8_CMD_CHARACTERISTIC_UUID    "00000001-0000-1000-8000-00805f9b34fb"
+
+class BluetoothTelemetry;
+
+class BleCmdCallbacks : public NimBLECharacteristicCallbacks {
+public:
+    BleCmdCallbacks(BluetoothTelemetry* parent) : _parent(parent) {}
+    void onWrite(NimBLECharacteristic* pCharacteristic) override;
+private:
+    BluetoothTelemetry* _parent;
+};
 
 class BluetoothTelemetry : public NimBLEServerCallbacks {
 public:
+    typedef std::function<void(const String&)> CommandCallback;
+
     BluetoothTelemetry() : 
         _enabled(false), 
         _initialized(false),
         _deviceConnected(false), 
         _pServer(nullptr), 
         _pCharacteristic(nullptr),
+        _pCmdCharacteristic(nullptr),
         _lastUpdateMillis(0),
-        _packetCounter(0) {}
+        _packetCounter(0),
+        _cmdCallback(nullptr) {}
 
     bool isEnabled() const { return _enabled; }
     bool isConnected() const { return _deviceConnected; }
+
+    void setCommandCallback(CommandCallback cb) {
+        _cmdCallback = cb;
+    }
+
+    void handleIncomingCommand(const String& cmd) {
+        if (_cmdCallback) {
+            _cmdCallback(cmd);
+        }
+    }
 
     void begin() {
         if (_enabled) return;
@@ -36,10 +62,20 @@ public:
             _pServer->setCallbacks(this);
 
             NimBLEService* pService = _pServer->createService(RACECHRONO_SERVICE_UUID);
+            
+            // 1. Data Characteristic (Notify 20Hz Telemetry)
             _pCharacteristic = pService->createCharacteristic(
                 RACECHRONO_CHARACTERISTIC_UUID,
                 NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
             );
+
+            // 2. Command Characteristic (Write from Web App / Smartphone)
+            _pCmdCharacteristic = pService->createCharacteristic(
+                FZ8_CMD_CHARACTERISTIC_UUID,
+                NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
+            );
+            _pCmdCharacteristic->setCallbacks(new BleCmdCallbacks(this));
+
             pService->start();
 
             NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
@@ -50,7 +86,7 @@ public:
 
         NimBLEDevice::startAdvertising();
         _enabled = true;
-        Serial.println("[BLE] *** NimBLE Server Attivo: FZ8-Telemetry (visibile per RaceChrono) ***");
+        Serial.println("[BLE] *** NimBLE Server Attivo: FZ8-Telemetry (visibile per Web App & RaceChrono) ***");
     }
 
     void stop() {
@@ -68,7 +104,7 @@ public:
 
     void onConnect(NimBLEServer* pServer) override {
         _deviceConnected = true;
-        Serial.println("[BLE] Smartphone connesso via NimBLE (RaceChrono attivo)!");
+        Serial.println("[BLE] Smartphone connesso via NimBLE!");
     }
 
     void onDisconnect(NimBLEServer* pServer) override {
@@ -97,8 +133,8 @@ public:
             dyn.gLongitudinal,   // Canale 2: G Longitudinale (+accel, -frenata)
             dyn.rollDeg,         // Canale 3: Angolo di Piega (gradi)
             dyn.pitchDeg,        // Canale 4: Beccheggio (gradi)
-            dyn.rollRateDps,     // Canale 5: Velocità di rollio (deg/s)
-            dyn.yawRateDps,      // Canale 6: Velocità di imbardata (deg/s)
+            dyn.rollRateDps,     // Canale 5: Velocita di rollio (deg/s)
+            dyn.yawRateDps,      // Canale 6: Velocita di imbardata (deg/s)
             dyn.altitudeM        // Canale 7: Quota barometrica (metri)
         );
 
@@ -121,8 +157,20 @@ private:
     bool _deviceConnected;
     NimBLEServer* _pServer;
     NimBLECharacteristic* _pCharacteristic;
+    NimBLECharacteristic* _pCmdCharacteristic;
     uint32_t _lastUpdateMillis;
     uint32_t _packetCounter;
+    CommandCallback _cmdCallback;
 };
+
+inline void BleCmdCallbacks::onWrite(NimBLECharacteristic* pCharacteristic) {
+    std::string rxValue = pCharacteristic->getValue();
+    if (rxValue.length() > 0 && _parent) {
+        String cmdStr = String(rxValue.c_str());
+        cmdStr.trim();
+        Serial.printf("[BLE CMD] Ricevuto comando: %s\n", cmdStr.c_str());
+        _parent->handleIncomingCommand(cmdStr);
+    }
+}
 
 #endif // BLUETOOTH_TELEMETRY_H
