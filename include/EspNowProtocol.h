@@ -4,8 +4,8 @@
 #include <Arduino.h>
 
 // ==============================================================================
-// ESP-NOW ULTRA-FAST BINARY TELEMETRY PACKET (30 Bytes)
-// Broadcasted at 50Hz with <2.5ms latency to Cockpit Display (1.28" Round / 1.47" Waveshare)
+// ESP-NOW ULTRA-FAST BINARY TELEMETRY PACKET (32 Bytes)
+// Broadcasted at 50Hz with <2.5ms latency to Cockpit Display (1.69" ST7789 / 1.28" GC9A01)
 // ==============================================================================
 struct __attribute__((packed)) EspNowTelemetryPacket {
     uint32_t timestampMs;
@@ -21,6 +21,7 @@ struct __attribute__((packed)) EspNowTelemetryPacket {
     int16_t  maxLeanRightX10;   // Peak Right lean
     int16_t  maxBrakingGX100;   // Peak braking G
     int16_t  maxAccelGX100;     // Peak accel G
+    uint8_t  tpsPercent;        // 0 - 100% Throttle Position
     uint8_t  activeScreen;      // Remote screen index
     uint8_t  flags;             // bit0: isLeanWarn, bit1: isBraking, bit2: isAccel, bit3: isLogging
 };

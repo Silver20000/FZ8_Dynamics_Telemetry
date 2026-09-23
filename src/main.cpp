@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
+#include <Preferences.h>
 #include "Config.h"
 #include "SensorsGY89.h"
 #include "MotorcycleFilter.h"
@@ -12,7 +13,7 @@
 
 // ==============================================================================
 // YAMAHA FZ8 MOTORCYCLE DYNAMICS MASTER UNIT (UNDER-SEAT / TAIL NODE)
-// High-Performance 100Hz IMU Kinematic Gating + 20Hz BLE + 50Hz ESP-NOW
+// High-Performance 100Hz IMU Kinematic Gating + TPS Sensor + 20Hz BLE + 50Hz ESP-NOW
 // ==============================================================================
 
 // Global Instances
@@ -20,10 +21,16 @@ SensorsGY89 imuSensors;
 MotorcycleFilter motoFilter;
 SessionLogger sessionLogger;
 BluetoothTelemetry bleTelemetry;
+Preferences prefs;
 
 // Dynamics State
 MotorcycleDynamics currentDynamics;
 IMURawData rawImu;
+
+// TPS (Throttle Position Sensor) State & Calibration
+uint16_t tpsMinAdc = TPS_MIN_ADC_DEFAULT;
+uint16_t tpsMaxAdc = TPS_MAX_ADC_DEFAULT;
+float filteredTpsAdc = TPS_MIN_ADC_DEFAULT;
 
 // ESP-NOW Broadcast Setup (for Wireless Cockpit Display)
 uint8_t espNowBroadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -42,6 +49,49 @@ uint32_t lastHeartbeatMillis = 0;
 bool lastButtonState = HIGH;
 uint32_t buttonPressStart = 0;
 bool buttonHandled = false;
+
+void loadTpsCalibration() {
+    prefs.begin("fz8_tps", false);
+    tpsMinAdc = prefs.getUShort("min", TPS_MIN_ADC_DEFAULT);
+    tpsMaxAdc = prefs.getUShort("max", TPS_MAX_ADC_DEFAULT);
+    prefs.end();
+    filteredTpsAdc = tpsMinAdc;
+    Serial.printf("[TPS] Calibrazione caricata: Min(0%%)=%d ADC, Max(100%%)=%d ADC\n", tpsMinAdc, tpsMaxAdc);
+}
+
+void saveTpsZero() {
+    uint16_t currentAdc = analogRead(TPS_ADC_PIN);
+    tpsMinAdc = currentAdc;
+    prefs.begin("fz8_tps", false);
+    prefs.putUShort("min", tpsMinAdc);
+    prefs.end();
+    Serial.printf("[TPS] *** ZERO GAS CALIBRATO: %d ADC ***\n", tpsMinAdc);
+}
+
+void saveTpsWot() {
+    uint16_t currentAdc = analogRead(TPS_ADC_PIN);
+    if (currentAdc > tpsMinAdc + 200) {
+        tpsMaxAdc = currentAdc;
+        prefs.begin("fz8_tps", false);
+        prefs.putUShort("max", tpsMaxAdc);
+        prefs.end();
+        Serial.printf("[TPS] *** 100%% GAS (WOT) CALIBRATO: %d ADC ***\n", tpsMaxAdc);
+    } else {
+        Serial.println("[TPS] ERRORE: Valore WOT troppo basso rispetto al minimo!");
+    }
+}
+
+void updateTps() {
+    uint16_t rawAdc = analogRead(TPS_ADC_PIN);
+    // Filtro IIR passa-basso rapido (immunità a disturbi bobine/candele)
+    filteredTpsAdc = 0.85f * filteredTpsAdc + 0.15f * (float)rawAdc;
+
+    float pct = 0.0f;
+    if (tpsMaxAdc > tpsMinAdc) {
+        pct = (filteredTpsAdc - tpsMinAdc) * 100.0f / (float)(tpsMaxAdc - tpsMinAdc);
+    }
+    currentDynamics.tpsPercent = constrain(pct, 0.0f, 100.0f);
+}
 
 void initEspNowBroadcaster() {
     WiFi.mode(WIFI_STA);
@@ -78,6 +128,7 @@ void sendEspNowTelemetry(const MotorcycleDynamics& dyn) {
     espNowPacket.maxLeanRightX10 = (int16_t)(dyn.maxLeanRight * 10.0f);
     espNowPacket.maxBrakingGX100 = (int16_t)(dyn.maxBrakingG * 100.0f);
     espNowPacket.maxAccelGX100 = (int16_t)(dyn.maxAccelG * 100.0f);
+    espNowPacket.tpsPercent = (uint8_t)dyn.tpsPercent;
     espNowPacket.activeScreen = selectedScreenIndex;
     
     uint8_t flags = 0;
@@ -129,11 +180,10 @@ void handleSerial() {
     while (Serial.available()) {
         char c = Serial.read();
         if (c == 's' || c == 'S') {
-            Serial.printf("[STATUS] Roll: %.1f deg, Pitch: %.1f deg, GLat: %.2f G, GLong: %.2f G, TareRoll: %.1f, TarePitch: %.1f, swapXY: %d, invRoll: %d\n",
+            Serial.printf("[STATUS] Roll: %.1f deg, Pitch: %.1f deg, GLat: %.2f G, GLong: %.2f G, TPS: %.1f%% (ADC:%d)\n",
                 currentDynamics.rollDeg, currentDynamics.pitchDeg,
                 currentDynamics.gLateral, currentDynamics.gLongitudinal,
-                motoFilter.getTareRoll(), motoFilter.getTarePitch(),
-                motoFilter.getSwapXY(), motoFilter.getInvertRoll());
+                currentDynamics.tpsPercent, (int)filteredTpsAdc);
         } else if (c == 't' || c == 'T') {
             motoFilter.tareZero();
             Serial.println("[SERIAL] Zero Tare Eseguito!");
@@ -143,6 +193,10 @@ void handleSerial() {
         } else if (c == 'x' || c == 'X') {
             motoFilter.toggleSwapXY();
             Serial.printf("[SERIAL] SwapXY: %d\n", motoFilter.getSwapXY());
+        } else if (c == 'c') {
+            saveTpsZero();
+        } else if (c == 'C') {
+            saveTpsWot();
         } else if (c == 'l' || c == 'L') {
             if (sessionLogger.isLogging()) sessionLogger.stopSession();
             else sessionLogger.startSession();
@@ -157,15 +211,20 @@ void handleSerial() {
 void setup() {
     Serial.begin(115200);
     delay(200);
-    Serial.println("\n========================================================");
-    Serial.println(" Yamaha FZ8 Dynamics Telemetry Master Unit (Tail Node)");
+    Serial.println("\n================================================================");
+    Serial.println(" Yamaha FZ8 Dynamics Telemetry Master Unit (Tail Node + TPS)");
     Serial.println(" ESP32-C3 + GY-89 (10-DOF) | Dual Radio: BLE + ESP-NOW");
-    Serial.println("========================================================");
+    Serial.println("================================================================");
 
     // Hardware Pins
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     pinMode(STATUS_LED_PIN, OUTPUT);
     digitalWrite(STATUS_LED_PIN, LOW); // LED ON at boot
+
+    // Analog Inputs Configuration (TPS on GPIO 7)
+    analogReadResolution(12); // 0 - 4095
+    analogSetPinAttenuation(TPS_ADC_PIN, ADC_11db); // 0 - 3.1V Full Scale
+    loadTpsCalibration();
 
     // 1. Initialize GY-89 10-DOF I2C Sensors (400 kHz Fast-Mode)
     Serial.println("[SYSTEM] Inizializzazione GY-89 (LSM303D + L3GD20 + BMP180)...");
@@ -184,7 +243,7 @@ void setup() {
     // 4. Initialize ESP-NOW Broadcaster (50 Hz Wireless link for Cockpit Display)
     initEspNowBroadcaster();
 
-    // 5. Initialize Bluetooth BLE Telemetry Server (20 Hz for Smartphone Web App / RaceChrono)
+    // 5. Initialize Bluetooth BLE Telemetry Server
     bleTelemetry.setCommandCallback([](const String& cmd) {
         if (cmd.startsWith("SCREEN:")) {
             selectedScreenIndex = cmd.substring(7).toInt();
@@ -197,7 +256,11 @@ void setup() {
             Serial.println("[BLE EXEC] Zero Tare Salvato!");
         } else if (cmd == "RESET_TARE") {
             motoFilter.resetTare();
-            Serial.println("[BLE EXEC] Zero Tare resettato a 0.0!");
+            Serial.println("[BLE EXEC] Zero Tare resettato!");
+        } else if (cmd == "CALIB_TPS_ZERO") {
+            saveTpsZero();
+        } else if (cmd == "CALIB_TPS_WOT") {
+            saveTpsWot();
         } else if (cmd == "INV_ROLL") {
             motoFilter.toggleInvertRoll();
             Serial.printf("[BLE EXEC] InvertRoll: %d\n", motoFilter.getInvertRoll());
@@ -228,7 +291,7 @@ void setup() {
     lastEspNowMillis = millis();
     lastHeartbeatMillis = millis();
     
-    Serial.println("[SYSTEM] *** Master Node operativo a 100Hz! ***\n");
+    Serial.println("[SYSTEM] *** Master Node operativo a 100Hz + TPS attivo! ***\n");
 }
 
 void loop() {
@@ -243,6 +306,7 @@ void loop() {
 
         imuSensors.readIMU(rawImu);
         motoFilter.update(rawImu, currentDynamics);
+        updateTps();
     }
 
     // ==========================================================================
@@ -279,7 +343,6 @@ void loop() {
 
     if (currentMillis - lastHeartbeatMillis >= 1000) {
         lastHeartbeatMillis = currentMillis;
-        // Heartbeat blink (20ms pulse)
         digitalWrite(STATUS_LED_PIN, LOW);
         delayMicroseconds(20000);
         digitalWrite(STATUS_LED_PIN, HIGH);

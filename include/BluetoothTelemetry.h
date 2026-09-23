@@ -54,7 +54,7 @@ public:
         if (_enabled) return;
 
         if (!_initialized) {
-            Serial.println("[BLE] Inizializzazione NimBLE (Lightweight Stack)...");
+            Serial.println("[BLE] Inizializzazione NimBLE...");
             NimBLEDevice::init(BLE_DEVICE_NAME);
             NimBLEDevice::setPower(ESP_PWR_LVL_P9); // Massima potenza RF
 
@@ -94,7 +94,7 @@ public:
         NimBLEDevice::getAdvertising()->stop();
         _enabled = false;
         _deviceConnected = false;
-        Serial.println("[BLE] NimBLE Advertising fermato (Radio BLE Silente).");
+        Serial.println("[BLE] NimBLE Advertising fermato.");
     }
 
     void toggle() {
@@ -123,10 +123,10 @@ public:
         _lastUpdateMillis = now;
 
         // RaceChrono DIY NMEA Format v2 (20Hz):
-        // $RC2,[time_ms],[count],[g_lat],[g_long],[roll_deg],[pitch_deg],[roll_rate],[yaw_rate],[altitude]*[checksum]\r\n
-        char sentence[128];
+        // $RC2,[time_ms],[count],[g_lat],[g_long],[roll_deg],[pitch_deg],[roll_rate],[yaw_rate],[altitude],[tps_pct]*[checksum]\r\n
+        char sentence[140];
         int len = snprintf(sentence, sizeof(sentence),
-            "$RC2,%lu,%lu,%.2f,%.2f,%.1f,%.1f,%.1f,%.1f,%.1f",
+            "$RC2,%lu,%lu,%.2f,%.2f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f",
             (unsigned long)now,
             (unsigned long)_packetCounter++,
             dyn.gLateral,        // Canale 1: G Laterale (Centripeta)
@@ -135,7 +135,8 @@ public:
             dyn.pitchDeg,        // Canale 4: Beccheggio (gradi)
             dyn.rollRateDps,     // Canale 5: Velocita di rollio (deg/s)
             dyn.yawRateDps,      // Canale 6: Velocita di imbardata (deg/s)
-            dyn.altitudeM        // Canale 7: Quota barometrica (metri)
+            dyn.altitudeM,       // Canale 7: Quota barometrica (metri)
+            dyn.tpsPercent       // Canale 8: % Apertura Farfalla Gas (TPS)
         );
 
         // Calcola Checksum XOR standard NMEA
@@ -144,7 +145,7 @@ public:
             checksum ^= (uint8_t)sentence[i];
         }
 
-        char fullPacket[140];
+        char fullPacket[150];
         int totalLen = snprintf(fullPacket, sizeof(fullPacket), "%s*%02X\r\n", sentence, checksum);
 
         _pCharacteristic->setValue((uint8_t*)fullPacket, totalLen);

@@ -1,4 +1,4 @@
-#ifndef MOTORCYCLE_FILTER_H
+﻿#ifndef MOTORCYCLE_FILTER_H
 #define MOTORCYCLE_FILTER_H
 
 #include <Arduino.h>
@@ -77,6 +77,8 @@ struct MotorcycleDynamics {
     bool isWheelie;             // True if pitch > +6.5 deg
     bool isStoppie;             // True if pitch < -5.5 deg and braking
     
+    float tpsPercent;           // 0.0 - 100.0% Throttle Position (TPS)
+    uint16_t tpsRawAdc;         // Raw ADC value
     float altitudeM;            // Current barometric altitude
     float minAltitudeM;         // Min elevation in session
     float maxAltitudeM;         // Max elevation in session
@@ -132,6 +134,8 @@ public:
         _dynamics.maxLeanRight = 0.0f;
         _dynamics.maxBrakingG = 0.0f;
         _dynamics.maxAccelG = 0.0f;
+        _dynamics.tpsPercent = 0.0f;
+        _dynamics.tpsRawAdc = 0;
         _dynamics.maxPitchUp = 0.0f;
         _dynamics.maxPitchDown = 0.0f;
         _dynamics.isWheelie = false;
@@ -560,3 +564,4 @@ private:
 };
 
 #endif // MOTORCYCLE_FILTER_H
+

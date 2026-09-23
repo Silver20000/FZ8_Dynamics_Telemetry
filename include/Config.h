@@ -1,10 +1,10 @@
-#ifndef CONFIG_H
+﻿#ifndef CONFIG_H
 #define CONFIG_H
 
 #include <Arduino.h>
 
 // ==============================================================================
-// HARDWARE PIN CONFIGURATION (ESP32-C3 Mini / Super Mini)
+// HARDWARE PIN CONFIGURATION (ESP32-C3 Mini / Super Mini - Master Node)
 // ==============================================================================
 
 // GY-89 10-DOF Module Pins
@@ -16,15 +16,15 @@
 
 #define I2C_FREQ_HZ         400000  // 400 kHz Fast-Mode for low-latency (<1.5ms)
 
-// SPI Bus & Display Pins (SSD1283A 1.6" Transflective LCD 130x130)
-#define LCD_CS_PIN          5       // CS -> GPIO 5
-#define LCD_RST_PIN         6       // Reset -> GPIO 6
-#define LCD_DC_PIN          7       // A0 / DC -> GPIO 7
-#define LCD_MOSI_PIN        8       // SDA / MOSI -> GPIO 8
-#define LCD_SCK_PIN         9       // SCK -> GPIO 9
-#define LCD_LED_PIN         10      // LED / Backlight -> GPIO 10
+// Analog Telemetry Inputs (Free ADC Pins on ESP32-C3)
+#define TPS_ADC_PIN         7       // Throttle Position Sensor (TPS) Signal -> GPIO 7 (ADC1_CH2)
+#define TPS_MIN_ADC_DEFAULT 450     // Default ADC a farfalla 0% (gas chiuso)
+#define TPS_MAX_ADC_DEFAULT 2800    // Default ADC a farfalla 100% (WOT)
 
-// User Interface / Status Pins (GPIO 20 and 21)
+#define BATT_VOLT_PIN       5       // (Opzionale) Voltmetro Batteria 12V -> GPIO 5 (ADC1_CH0)
+#define SHOCK_POT_PIN       6       // (Opzionale) Potenziometro Mono Posteriore -> GPIO 6 (ADC1_CH1)
+
+// User Interface / Status Pins
 #define BUTTON_PIN          20      // User button (active LOW, internal pull-up) -> GPIO 20
 #define STATUS_LED_PIN      21      // Status LED (active LOW / optional) -> GPIO 21
 
@@ -53,11 +53,7 @@
 #define GATE_LATERAL_G_MAX      0.08f   // Max lateral accel (|ay|) for straight motion (g)
 #define STRAIGHT_TIME_CONFIRM_MS 250    // Time bike must remain straight to allow gyro bias update
 
-// Display Refresh Rate
-#define DISPLAY_REFRESH_HZ      25      // 25 Hz UI refresh (40ms)
-#define DISPLAY_REFRESH_MS      (1000 / DISPLAY_REFRESH_HZ)
-
-// Barometer (BMP180) Poll & Aggressive Low-Pass Filtering (immunità turbolenze aerodinamiche)
+// Barometer (BMP180) Poll & Aggressive Low-Pass Filtering
 #define BARO_POLL_INTERVAL_MS   500     // 2 Hz altitude/temp query (non-blocking)
 #define BARO_ALT_ALPHA          0.08f   // Filtro IIR passa-basso su quota (tau ~ 2 sec)
 #define ELEVATION_GAIN_DEADBAND_M 2.0f  // Deadband minima accumulo D+ per rigettare turbolenze cupolino
@@ -65,44 +61,28 @@
 // Datalogger Compatto Binario (LittleFS Flash)
 #define DATALOGGER_INTERVAL_MS   100    // 10 Hz sampling rate for Flash datalogger
 #define LOG_RAM_BUFFER_SAMPLES   50     // 50 campioni = 5 secondi di registrazione in RAM
-#define LOG_STRUCT_SIZE          20     // 20 byte per campione binario
-#define LOG_RAM_BUFFER_BYTES     (LOG_RAM_BUFFER_SAMPLES * LOG_STRUCT_SIZE) // 1000 byte buffer RAM
+#define LOG_STRUCT_SIZE          24     // 24 byte per campione binario (con TPS)
+#define LOG_RAM_BUFFER_BYTES     (LOG_RAM_BUFFER_SAMPLES * LOG_STRUCT_SIZE) // 1200 byte buffer RAM
 
-// Radio Modes (Mutua Esclusione per ESP32-C3 Single-Core)
-enum RadioMode {
-    RADIO_MODE_DASHBOARD = 0,   // Solo Hotspot Wi-Fi AP + Captive Portal (zero STA, zero scansioni)
-    RADIO_MODE_RACECHRONO = 1   // NimBLE attivo a 20Hz, Wi-Fi OFF (zero contesa RF, zero latenza)
-};
-
+// Radio Modes
 #define BLE_UPDATE_INTERVAL_MS  50      // 20 Hz update rate for RaceChrono BLE
 #define BLE_DEVICE_NAME         "FZ8-Telemetry"
 
-// Corner Analyzer (Isteresi Chicane)
-#define CORNER_EXIT_HYSTERESIS_MS 250   // 250ms per confermare uscita curva (evita micro-reset su chicane)
+// Corner Analyzer
+#define CORNER_EXIT_HYSTERESIS_MS 250   // 250ms per confermare uscita curva
 
-// Lean Warning & Crash Detection (Roll-Rate Gated)
+// Lean Warning & Crash Detection
 #define DEFAULT_MAX_LEAN_WARN_DEG 48.0f // Allarme visivo pedana a terra
-#define CRASH_DETECT_ROLL_DEG    65.0f // Soglia rilevamento caduta/moto sdraiata
+#define CRASH_DETECT_ROLL_DEG    65.0f // Soglia rilevamento caduta
 #define CRASH_DETECT_TIME_MS     3500  // Tempo minimo con moto ferma a terra per allarme
-#define CRASH_DETECT_MAX_RATE_DPS 12.0f // Roll rate deve essere quasi nullo (moto ferma a terra)
-#define CRASH_DETECT_ACCEL_TOL_G  0.35f // Accelerazione statica 1.0G +- 0.35G
+#define CRASH_DETECT_MAX_RATE_DPS 12.0f // Roll rate quasi nullo
+#define CRASH_DETECT_ACCEL_TOL_G  0.35f
 
 // Magnetometer & Heading Gating
 #define ENABLE_MAGNETOMETER          true
 #define MAG_DECLINATION_DEG          3.5f   // Declinazione magnetica media Italia (+3.5 deg Est)
-#define COMPASS_MAX_ROLL_VALID_DEG   6.0f   // Entro 6° di rollio la bussola è VALIDA
-#define COMPASS_MAX_GLAT_VALID       0.15f  // Max 0.15G laterale
-#define COMPASS_MAX_YAWRATE_VALID    4.0f   // Max 4 deg/s yaw rate
-
-// ==============================================================================
-// WI-FI CONFIGURATION: HOTSPOT AP AD ALTA STABILITA (12 dBm TX POWER)
-// Rete Aperta, Canale 1, Captive Portal DNS, Zero cadute di tensione
-// ==============================================================================
-#define AP_SSID                 "FZ8-Telemetry"
-#define AP_PASSWORD             ""               // Rete APERTA per massima compatibilita immediata
-#define AP_IP_ADDR              "192.168.4.1"
-#define AP_CHANNEL              1                // Canale 1 universale
-#define AP_MAX_TX_POWER         48               // 12.0 dBm (evita cali di tensione USB/LDO)
-#define MDNS_HOSTNAME           "fz8"            // Accessibile come http://fz8.local o http://192.168.4.1
+#define COMPASS_MAX_ROLL_VALID_DEG   6.0f
+#define COMPASS_MAX_GLAT_VALID       0.15f
+#define COMPASS_MAX_YAWRATE_VALID    4.0f
 
 #endif // CONFIG_H

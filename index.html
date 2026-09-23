@@ -153,7 +153,11 @@
         .stat-grid { display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }
         .stat-box { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 6px 8px; }
         .stat-label { font-size: 9px; color: var(--text-dim); font-weight: 700; text-transform: uppercase; }
-        .stat-num { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 1px; }
+        .stat-num { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 1px; }
+        
+        .bar-track { width: 100%; height: 5px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; position: relative; overflow: hidden; margin-top: 3px; }
+        .bar-fill { position: absolute; height: 100%; top: 0; left: 0; width: 0%; background: var(--accent-green); transition: width 0.05s ease; }
+        
         .pitch-bar-wrap { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
         .pitch-track { flex: 1; height: 5px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; position: relative; overflow: hidden; }
         .pitch-fill { position: absolute; height: 100%; top: 0; left: 50%; width: 0%; background: var(--yamaha-cyan); transition: width 0.05s ease, left 0.05s ease; }
@@ -196,7 +200,6 @@
             background: #0d1117;
         }
         
-        /* Dark Theme on Free OSM Tiles */
         .dark-map .dark-tiles {
             filter: brightness(0.62) invert(1) contrast(2.8) hue-rotate(200deg) saturate(0.3) brightness(0.75);
         }
@@ -410,6 +413,13 @@
 
             <div class="card stat-grid">
                 <div class="stat-box">
+                    <span class="stat-label">Farfalla Gas (TPS)</span>
+                    <div class="stat-num" id="lblTps" style="color:var(--accent-green);">0 %</div>
+                    <div class="bar-track">
+                        <div class="bar-fill" id="tpsFill"></div>
+                    </div>
+                </div>
+                <div class="stat-box">
                     <span class="stat-label">Frenata / Accel</span>
                     <div class="stat-num" id="lblGLong">0.00 G</div>
                 </div>
@@ -433,7 +443,7 @@
         <div class="card graph-card">
             <div class="lean-header">
                 <span>Grafico Live (60 fps)</span>
-                <span style="font-size:9px;color:var(--text-dim);">● Piega  ● G-Long</span>
+                <span style="font-size:9px;color:var(--text-dim);">● Piega  ● G-Long  ● TPS</span>
             </div>
             <canvas id="canvasGraph" class="graph-canvas" width="600" height="160"></canvas>
         </div>
@@ -551,11 +561,11 @@
         </div>
     </div>
 
-    <!-- TAB 3: SCHERMATE DISPLAY LCD 1.6" -->
+    <!-- TAB 3: SCHERMATE DISPLAY LCD -->
     <div id="tabScreens" class="tab-content">
         <div class="card">
             <div class="lean-header" style="margin-bottom:10px;">
-                <span>Seleziona Schermata Display LCD</span>
+                <span>Seleziona Schermata Display Cockpit</span>
                 <button class="btn-reset-max" onclick="sendBleCmd('SCREEN_NEXT')">AVANTI ⏩</button>
             </div>
             <div class="screen-grid">
@@ -611,6 +621,28 @@
 
     <!-- TAB 4: CALIBRAZIONE & IMPOSTAZIONI -->
     <div id="tabSettings" class="tab-content">
+        <!-- Calibrazione TPS Gas -->
+        <div class="card">
+            <div class="lean-header" style="margin-bottom:8px;">
+                <span>Calibrazione Farfalla Gas (TPS)</span>
+            </div>
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Calibra Zero Gas (Minimo)</span>
+                    <span class="setting-hint">Manopola rilasciata a gas completamente chiuso</span>
+                </div>
+                <button class="toggle-btn on" onclick="sendBleCmd('CALIB_TPS_ZERO')">SALVA MIN</button>
+            </div>
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Calibra 100% Gas (WOT)</span>
+                    <span class="setting-hint">Ruota la manopola a tutto gas e premi</span>
+                </div>
+                <button class="toggle-btn on" onclick="sendBleCmd('CALIB_TPS_WOT')">SALVA MAX</button>
+            </div>
+        </div>
+
+        <!-- Calibrazione IMU & Montaggio -->
         <div class="card">
             <div class="lean-header" style="margin-bottom:8px;">
                 <span>Calibrazione IMU & Montaggio</span>
@@ -684,7 +716,7 @@
     let isConnected = false;
 
     let state = {
-        roll: 0, pitch: 0, gLat: 0, gLong: 0, rollRate: 0, yawRate: 0, altitude: 0,
+        roll: 0, pitch: 0, gLat: 0, gLong: 0, rollRate: 0, yawRate: 0, altitude: 0, tps: 0,
         maxRollL: 0, maxRollR: 0, maxBrake: 0, maxAccel: 0, warningThreshold: 48.0
     };
 
@@ -784,12 +816,14 @@
     async function sendBleCmd(cmdStr) {
         if (!isConnected || !bleCmdChar) {
             console.log("Mock cmd (not connected):", cmdStr);
+            alert(`Comando '${cmdStr}' pronto! (Connetti prima il BLE alla moto)`);
             return;
         }
         try {
             const encoder = new TextEncoder();
             await bleCmdChar.writeValue(encoder.encode(cmdStr));
             console.log("Sent BLE Cmd:", cmdStr);
+            alert(`Comando '${cmdStr}' inviato con successo!`);
         } catch(e) {
             console.error("Failed to send BLE command:", e);
         }
@@ -846,6 +880,7 @@
             let rollRate = parseFloat(parts[7]) || 0;
             let yawRate = parseFloat(parts[8]) || 0;
             let alt = parseFloat(parts[9]) || 0;
+            let tps = (parts.length >= 11) ? (parseFloat(parts[10]) || 0) : 0;
 
             let gLat = rawGLat;
             let gLong = rawGLong;
@@ -861,11 +896,11 @@
                 gLat = rawGLong;
             }
 
-            updateTelemetry(roll, pitch, gLat, gLong, rollRate, yawRate, alt);
+            updateTelemetry(roll, pitch, gLat, gLong, rollRate, yawRate, alt, tps);
         }
     }
 
-    function updateTelemetry(roll, pitch, gLat, gLong, rollRate, yawRate, alt) {
+    function updateTelemetry(roll, pitch, gLat, gLong, rollRate, yawRate, alt, tps) {
         state.roll = roll;
         state.pitch = pitch;
         state.gLat = gLat;
@@ -873,6 +908,7 @@
         state.rollRate = rollRate;
         state.yawRate = yawRate;
         state.altitude = alt;
+        state.tps = tps;
 
         if (roll < 0 && Math.abs(roll) > state.maxRollL) state.maxRollL = Math.abs(roll);
         if (roll > 0 && roll > state.maxRollR) state.maxRollR = roll;
@@ -885,6 +921,7 @@
                 lat: currentGpsState.lat,
                 lon: currentGpsState.lon,
                 speedKmh: currentGpsState.speedKmh.toFixed(1),
+                tps: tps.toFixed(0),
                 roll: roll.toFixed(2),
                 pitch: pitch.toFixed(2),
                 gLat: gLat.toFixed(3),
@@ -960,6 +997,12 @@
         document.getElementById("lblMaxL").innerText = state.maxRollL.toFixed(1) + "°";
         document.getElementById("lblMaxR").innerText = state.maxRollR.toFixed(1) + "°";
 
+        // TPS Update
+        document.getElementById("lblTps").innerText = state.tps.toFixed(0) + " %";
+        let tpsFill = document.getElementById("tpsFill");
+        tpsFill.style.width = Math.min(100, Math.max(0, state.tps)) + "%";
+        tpsFill.style.background = (state.tps > 80) ? "var(--accent-orange)" : "var(--accent-green)";
+
         const alertEl = document.getElementById("alertFlash");
         if (absRoll >= state.warningThreshold) {
             alertEl.classList.add("active");
@@ -994,7 +1037,7 @@
             pitchFill.style.background = "var(--yamaha-cyan)";
         }
 
-        graphHistory.push({ roll: state.roll, gLong: state.gLong });
+        graphHistory.push({ roll: state.roll, gLong: state.gLong, tps: state.tps });
         if (graphHistory.length > MAX_GRAPH_PTS) graphHistory.shift();
 
         gTrail.push({ x: state.gLat, y: state.gLong });
@@ -1209,9 +1252,9 @@
             return;
         }
 
-        let csv = "Time_s,Latitude,Longitude,Speed_kmh,Roll_deg,Pitch_deg,G_Lat,G_Long,RollRate_dps,YawRate_dps,Altitude_m\n";
+        let csv = "Time_s,Latitude,Longitude,Speed_kmh,TPS_pct,Roll_deg,Pitch_deg,G_Lat,G_Long,RollRate_dps,YawRate_dps,Altitude_m\n";
         for (let r of recordedData) {
-            csv += `${r.time},${r.lat},${r.lon},${r.speedKmh},${r.roll},${r.pitch},${r.gLat},${r.gLong},${r.rollRate},${r.yawRate},${r.alt}\n`;
+            csv += `${r.time},${r.lat},${r.lon},${r.speedKmh},${r.tps || 0},${r.roll},${r.pitch},${r.gLat},${r.gLong},${r.rollRate},${r.yawRate},${r.alt}\n`;
         }
 
         downloadFile(csv, `FZ8_Telemetry_${getTimestampStr()}.csv`, "text/csv;charset=utf-8;");
@@ -1234,6 +1277,7 @@
                 gpx += `        <ele>${r.alt}</ele>\n`;
                 gpx += `        <extensions>\n`;
                 gpx += `          <speed>${(parseFloat(r.speedKmh)/3.6).toFixed(2)}</speed>\n`;
+                gpx += `          <tps>${r.tps || 0}</tps>\n`;
                 gpx += `          <roll>${r.roll}</roll>\n`;
                 gpx += `          <g_long>${r.gLong}</g_long>\n`;
                 gpx += `        </extensions>\n`;
@@ -1311,7 +1355,9 @@
         if (graphHistory.length < 2) { requestAnimationFrame(drawGraph); return; }
 
         const step = w / (MAX_GRAPH_PTS - 1);
-        ctxGr.strokeStyle = "#00d4ff"; ctxGr.lineWidth = 2.2; ctxGr.beginPath();
+        
+        // 1. Roll Curve (Cyan)
+        ctxGr.strokeStyle = "#00d4ff"; ctxGr.lineWidth = 2.0; ctxGr.beginPath();
         for (let i = 0; i < graphHistory.length; i++) {
             let x = i * step;
             let y = cy + (graphHistory[i].roll / 60) * (cy - 8);
@@ -1320,10 +1366,21 @@
         }
         ctxGr.stroke();
 
+        // 2. G-Long Curve (Orange)
         ctxGr.strokeStyle = "#ff9100"; ctxGr.lineWidth = 1.6; ctxGr.beginPath();
         for (let i = 0; i < graphHistory.length; i++) {
             let x = i * step;
             let y = cy - (graphHistory[i].gLong / 1.5) * (cy - 8);
+            if (i === 0) ctxGr.moveTo(x, y);
+            else ctxGr.lineTo(x, y);
+        }
+        ctxGr.stroke();
+
+        // 3. TPS Gas Curve (Green dotted/thin)
+        ctxGr.strokeStyle = "#00e676"; ctxGr.lineWidth = 1.2; ctxGr.beginPath();
+        for (let i = 0; i < graphHistory.length; i++) {
+            let x = i * step;
+            let y = (h - 6) - (graphHistory[i].tps / 100) * (h - 12);
             if (i === 0) ctxGr.moveTo(x, y);
             else ctxGr.lineTo(x, y);
         }
