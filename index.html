@@ -181,7 +181,7 @@
         .corner-max { font-size: 14px; font-weight: 800; }
         .corner-rate { font-size: 9px; color: var(--text-dim); }
 
-        /* Map Styles */
+        /* Map Styles & 100% Free Dark Filter */
         .map-container-wrap {
             position: relative;
             width: 100%;
@@ -195,6 +195,12 @@
             height: 100%;
             background: #0d1117;
         }
+        
+        /* Dark Theme on Free OSM Tiles */
+        .dark-map .dark-tiles {
+            filter: brightness(0.62) invert(1) contrast(2.8) hue-rotate(200deg) saturate(0.3) brightness(0.75);
+        }
+
         .map-overlay-stats {
             position: absolute;
             top: 10px;
@@ -475,7 +481,7 @@
             </div>
 
             <div class="map-container-wrap">
-                <div id="mapView"></div>
+                <div id="mapView" class="dark-map"></div>
                 
                 <!-- Floating Real-time Stats Overlay -->
                 <div class="map-overlay-stats">
@@ -495,6 +501,11 @@
 
                 <!-- Floating Map Buttons -->
                 <div class="map-floating-controls">
+                    <button class="map-ctrl-btn" id="btnLayerToggle" onclick="toggleMapLayer()" title="Cambia Layer Mappa">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9.07l-9-7-9 7 1.63 1.27L12 16z"/>
+                        </svg>
+                    </button>
                     <button class="map-ctrl-btn active" id="btnFollowBike" onclick="toggleFollowBike()" title="Segui Moto">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
@@ -692,15 +703,18 @@
     const MAX_GRAPH_PTS = 120;
     const gTrail = [];
 
-    // GPS & Map State
+    // GPS & Map State (100% Free OpenStreetMap & Esri Satellite Layers, ZERO API Keys)
     let map = null;
     let bikeMarker = null;
     let gpsWatchId = null;
     let followBike = true;
     let totalGpsDistM = 0;
     let lastGpsPos = null;
-    let gpsTrackSegments = []; // Array of Leaflet polylines
+    let gpsTrackSegments = [];
     let currentGpsState = { lat: 0, lon: 0, speedKmh: 0, altitude: 0, heading: 0, accuracy: 0 };
+    
+    let mapLayers = [];
+    let currentLayerIndex = 0;
 
     // Tab Switching
     function switchTab(tabId, btn) {
@@ -1013,7 +1027,7 @@
     }
 
     // =========================================================================
-    // GPS & LEAFLET MAP TRACKING SYSTEM
+    // GPS & LEAFLET MAP TRACKING SYSTEM (100% FREE - NO API KEYS)
     // =========================================================================
     function initMap() {
         if (map) return;
@@ -1029,11 +1043,24 @@
             attributionControl: false
         });
 
-        // Crisp Dark Map Tiles (CartoDB Dark Matter)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        // 1. OpenStreetMap Dark Filter (100% Free, No Key, Night Mode)
+        const osmDark = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
-            subdomains: 'abcd'
-        }).addTo(map);
+            className: 'dark-tiles'
+        });
+
+        // 2. Esri Satellite (100% Free World Imagery, No Key)
+        const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19
+        });
+
+        // 3. OpenStreetMap Standard (100% Free Standard Day Map)
+        const osmStandard = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+        });
+
+        mapLayers = [osmDark, esriSat, osmStandard];
+        mapLayers[0].addTo(map);
 
         // Custom Bike Marker
         const bikeIcon = L.divIcon({
@@ -1050,6 +1077,20 @@
 
         // Start GPS
         initGpsTracking();
+    }
+
+    function toggleMapLayer() {
+        if (!map || mapLayers.length === 0) return;
+        map.removeLayer(mapLayers[currentLayerIndex]);
+        currentLayerIndex = (currentLayerIndex + 1) % mapLayers.length;
+        mapLayers[currentLayerIndex].addTo(map);
+
+        const mapEl = document.getElementById('mapView');
+        if (currentLayerIndex === 0) {
+            mapEl.classList.add('dark-map');
+        } else {
+            mapEl.classList.remove('dark-map');
+        }
     }
 
     function initGpsTracking(forceRestart = false) {
