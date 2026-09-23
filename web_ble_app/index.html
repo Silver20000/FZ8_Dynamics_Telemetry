@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0e17">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Yamaha FZ8 Telemetry BLE</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        :root {
+            --bg-main: #0a0e17;
+            --bg-card: #121824;
+            --bg-card-glass: rgba(18, 24, 36, 0.85);
+            --border-card: #1f2a3e;
+            --text-main: #f0f4f8;
+            --text-dim: #7e8c9f;
+            --yamaha-blue: #0066ff;
+            --yamaha-cyan: #00d4ff;
+            --accent-green: #00e676;
+            --accent-red: #ff1744;
+            --accent-orange: #ff9100;
+            --accent-yellow: #ffd600;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: radial-gradient(circle at 50% 0%, #162032 0%, var(--bg-main) 100%);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 12px; }
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--bg-card-glass); backdrop-filter: blur(10px);
+            border: 1px solid var(--border-card); border-radius: 14px; padding: 10px 14px;
+        }
+        .logo-box { display: flex; align-items: center; gap: 8px; }
+        .logo-badge {
+            background: linear-gradient(135deg, var(--yamaha-blue), var(--yamaha-cyan));
+            color: white; font-weight: 900; font-size: 11px; padding: 3px 7px; border-radius: 6px;
+        }
+        .app-title { font-size: 15px; font-weight: 700; }
+        .conn-btn {
+            background: linear-gradient(135deg, var(--yamaha-blue), #0047ba);
+            color: white; border: none; border-radius: 10px; padding: 7px 14px; font-size: 13px;
+            font-weight: 700; display: flex; align-items: center; gap: 6px; cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.35);
+        }
+        .conn-btn.connected { background: linear-gradient(135deg, #00c853, #009624); box-shadow: 0 4px 12px rgba(0, 200, 83, 0.35); }
+        .conn-btn.recording { background: linear-gradient(135deg, var(--accent-red), #b71c1c); animation: pulse-red 1.5s infinite; }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(255, 23, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 23, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 23, 68, 0); }
+        }
+        .card {
+            background: var(--bg-card-glass); backdrop-filter: blur(10px);
+            border: 1px solid var(--border-card); border-radius: 18px; padding: 14px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+        .lean-card { display: flex; flex-direction: column; align-items: center; position: relative; }
+        .lean-header {
+            width: 100%; display: flex; justify-content: space-between;
+            font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px;
+        }
+        .gauge-svg-wrap { width: 100%; max-width: 300px; height: 170px; position: relative; }
+        .lean-value-center { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); text-align: center; }
+        .lean-deg-big {
+            font-size: 52px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums;
+            background: linear-gradient(180deg, #ffffff 40%, var(--yamaha-cyan) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .lean-dir-badge { font-size: 13px; font-weight: 800; color: var(--text-dim); }
+        .max-lean-container {
+            width: 100%; display: flex; justify-content: space-between; align-items: center;
+            margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-card);
+        }
+        .max-item { display: flex; flex-direction: column; gap: 2px; }
+        .max-label { font-size: 11px; color: var(--text-dim); font-weight: 600; }
+        .max-val { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .max-val.left { color: var(--yamaha-cyan); }
+        .max-val.right { color: var(--accent-orange); }
+        .btn-reset-max {
+            background: rgba(255, 255, 255, 0.08); border: 1px solid var(--border-card);
+            color: var(--text-dim); border-radius: 8px; padding: 5px 10px; font-size: 11px; font-weight: 700; cursor: pointer;
+        }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .gmeter-wrap { display: flex; flex-direction: column; align-items: center; }
+        .canvas-gmeter {
+            width: 130px; height: 130px; border-radius: 50%;
+            background: radial-gradient(circle, #101622 0%, #080c14 100%); border: 1px solid var(--border-card);
+        }
+        .stat-grid { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; }
+        .stat-box { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 8px 10px; }
+        .stat-label { font-size: 10px; color: var(--text-dim); font-weight: 700; text-transform: uppercase; }
+        .stat-num { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 1px; }
+        .pitch-bar-wrap { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+        .pitch-track { flex: 1; height: 6px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; position: relative; overflow: hidden; }
+        .pitch-fill { position: absolute; height: 100%; top: 0; left: 50%; width: 0%; background: var(--yamaha-cyan); transition: width 0.05s ease, left 0.05s ease; }
+        .graph-card { display: flex; flex-direction: column; gap: 6px; }
+        .graph-canvas { width: 100%; height: 90px; background: #080c14; border-radius: 10px; border: 1px solid var(--border-card); }
+        .actions-bar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .action-btn {
+            background: rgba(255, 255, 255, 0.06); border: 1px solid var(--border-card);
+            color: var(--text-main); border-radius: 12px; padding: 10px 6px; font-size: 12px;
+            font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer;
+        }
+        .action-btn:active { background: rgba(255, 255, 255, 0.15); }
+        .action-btn.active { background: rgba(255, 23, 68, 0.2); border-color: var(--accent-red); color: var(--accent-red); }
+        .corners-card { display: flex; flex-direction: column; gap: 8px; }
+        .corner-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+        .corner-pill {
+            background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-card);
+            border-radius: 10px; padding: 6px 10px; min-width: 80px; flex-shrink: 0; display: flex; flex-direction: column; gap: 1px;
+        }
+        .corner-dir { font-size: 10px; font-weight: 800; }
+        .corner-dir.L { color: var(--yamaha-cyan); }
+        .corner-dir.R { color: var(--accent-orange); }
+        .corner-max { font-size: 15px; font-weight: 800; }
+        .corner-rate { font-size: 10px; color: var(--text-dim); }
+        .alert-flash {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            border: 6px solid var(--accent-red); pointer-events: none; opacity: 0; transition: opacity 0.1s ease; z-index: 999;
+        }
+        .alert-flash.active { opacity: 1; }
+    </style>
+</head>
+<body>
+
+<div class="alert-flash" id="alertFlash"></div>
+
+<div class="container">
+    <header>
+        <div class="logo-box">
+            <span class="logo-badge">FZ8</span>
+            <span class="app-title">Telemetry BLE</span>
+        </div>
+        <button class="conn-btn" id="btnConnect" onclick="toggleBluetooth()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
+            </svg>
+            <span id="btnConnectText">Connetti BLE</span>
+        </button>
+    </header>
+
+    <div class="card lean-card">
+        <div class="lean-header">
+            <span>Angolo di Piega</span>
+            <span id="lblRollRate" style="color:var(--yamaha-cyan)">0 °/s</span>
+        </div>
+
+        <div class="gauge-svg-wrap">
+            <svg viewBox="0 0 300 180" style="width:100%;height:100%;">
+                <path d="M 30 150 A 120 120 0 0 1 270 150" fill="none" stroke="#162032" stroke-width="14" stroke-linecap="round"/>
+                <path d="M 120 38 A 120 120 0 0 1 180 38" fill="none" stroke="#00e676" stroke-width="6" opacity="0.4"/>
+                <circle cx="56" cy="74" r="4" fill="#ff1744"/>
+                <circle cx="244" cy="74" r="4" fill="#ff1744"/>
+                <line id="svgNeedle" x1="150" y1="150" x2="150" y2="35" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+                <circle cx="150" cy="150" r="8" fill="#ffffff"/>
+            </svg>
+
+            <div class="lean-value-center">
+                <div class="lean-deg-big" id="lblRollDeg">0.0°</div>
+                <div class="lean-dir-badge" id="lblRollDir">DIRITTO</div>
+            </div>
+        </div>
+
+        <div class="max-lean-container">
+            <div class="max-item">
+                <span class="max-label">MAX SINISTRA</span>
+                <span class="max-val left" id="lblMaxL">0.0°</span>
+            </div>
+            <button class="btn-reset-max" onclick="resetMaxStats()">RESET RECORD</button>
+            <div class="max-item" style="align-items:flex-end;">
+                <span class="max-label">MAX DESTRA</span>
+                <span class="max-val right" id="lblMaxR">0.0°</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-2">
+        <div class="card gmeter-wrap">
+            <div class="lean-header" style="margin-bottom:8px;">
+                <span>G-Meter 2D</span>
+                <span id="lblTotalG" style="color:var(--text-main);">1.00 G</span>
+            </div>
+            <canvas id="canvasGMeter" class="canvas-gmeter" width="260" height="260"></canvas>
+            <div style="display:flex;justify-content:space-between;width:100%;font-size:10px;color:var(--text-dim);margin-top:6px;font-weight:700;">
+                <span id="lblMaxBrake">BRK: 0.00 G</span>
+                <span id="lblMaxAccel">ACC: 0.00 G</span>
+            </div>
+        </div>
+
+        <div class="card stat-grid">
+            <div class="stat-box">
+                <span class="stat-label">Frenata / Accel</span>
+                <div class="stat-num" id="lblGLong">0.00 G</div>
+            </div>
+            <div class="stat-box">
+                <span class="stat-label">Beccheggio Forcella</span>
+                <div class="stat-num" id="lblPitch">0.0°</div>
+                <div class="pitch-bar-wrap">
+                    <div class="pitch-track">
+                        <div class="pitch-fill" id="pitchFill"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-box">
+                <span class="stat-label">Quota Barometrica</span>
+                <div class="stat-num" id="lblAlt" style="color:var(--yamaha-cyan);">-- m</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card graph-card">
+        <div class="lean-header">
+            <span>Grafico Live (60 fps)</span>
+            <span style="font-size:10px;color:var(--text-dim);">● Piega  ● G-Long</span>
+        </div>
+        <canvas id="canvasGraph" class="graph-canvas" width="600" height="180"></canvas>
+    </div>
+
+    <div class="card corners-card">
+        <div class="lean-header">
+            <span>Ultime Curve Analizzate</span>
+            <span id="lblCornerCount" style="color:var(--yamaha-cyan)">0 curve</span>
+        </div>
+        <div class="corner-list" id="cornerList">
+            <div style="font-size:11px;color:var(--text-dim);padding:8px 0;">In attesa delle prime curve...</div>
+        </div>
+    </div>
+
+    <div class="actions-bar">
+        <button class="action-btn" id="btnRecord" onclick="toggleRecording()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="12" r="8"/>
+            </svg>
+            <span id="lblRecText">REC Sessione</span>
+        </button>
+        <button class="action-btn" onclick="exportCsv()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+            </svg>
+            <span>Scarica CSV</span>
+        </button>
+        <button class="action-btn" onclick="tareZero()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+            </svg>
+            <span>Azzera Tare</span>
+        </button>
+    </div>
+</div>
+
+<script>
+    const SERVICE_UUID = "00001ff8-0000-1000-8000-00805f9b34fb";
+    const CHAR_DATA_UUID = "00000002-0000-1000-8000-00805f9b34fb";
+
+    let bleDevice = null;
+    let bleServer = null;
+    let bleChar = null;
+    let isConnected = false;
+
+    let state = {
+        roll: 0, pitch: 0, gLat: 0, gLong: 0, rollRate: 0, yawRate: 0, altitude: 0,
+        maxRollL: 0, maxRollR: 0, maxBrake: 0, maxAccel: 0, warningThreshold: 48.0
+    };
+
+    let isRecording = false;
+    let recordedData = [];
+    let recStartTime = 0;
+
+    let inCorner = false;
+    let currentCorner = { isLeft: false, peakRoll: 0, peakRate: 0, startTime: 0 };
+    let cornerHistory = [];
+
+    const graphHistory = [];
+    const MAX_GRAPH_PTS = 120;
+    const gTrail = [];
+
+    let wakeLock = null;
+    async function requestWakeLock() {
+        try {
+            if ('wakeLock' in navigator) {
+                wakeLock = await navigator.wakeLock.request('screen');
+            }
+        } catch(e) {}
+    }
+
+    async function toggleBluetooth() {
+        if (isConnected) {
+            if (bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            }
+            return;
+        }
+
+        try {
+            document.getElementById("btnConnectText").innerText = "Ricerca...";
+            bleDevice = await navigator.bluetooth.requestDevice({
+                filters: [
+                    { namePrefix: 'FZ8' },
+                    { services: [SERVICE_UUID] }
+                ],
+                optionalServices: [SERVICE_UUID]
+            });
+
+            bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+            document.getElementById("btnConnectText").innerText = "Connessione...";
+
+            bleServer = await bleDevice.gatt.connect();
+            const service = await bleServer.getPrimaryService(SERVICE_UUID);
+            bleChar = await service.getCharacteristic(CHAR_DATA_UUID);
+
+            await bleChar.startNotifications();
+            bleChar.addEventListener('characteristicvaluechanged', handleBleData);
+
+            isConnected = true;
+            document.getElementById("btnConnect").classList.add("connected");
+            document.getElementById("btnConnectText").innerText = "FZ8 Connesso";
+            requestWakeLock();
+        } catch (err) {
+            console.error("BLE Error:", err);
+            onDisconnected();
+        }
+    }
+
+    function onDisconnected() {
+        isConnected = false;
+        document.getElementById("btnConnect").classList.remove("connected");
+        document.getElementById("btnConnectText").innerText = "Connetti BLE";
+    }
+
+    const decoder = new TextDecoder();
+    let rxBuffer = "";
+
+    function handleBleData(event) {
+        const text = decoder.decode(event.target.value);
+        rxBuffer += text;
+
+        let lines = rxBuffer.split("\r\n");
+        rxBuffer = lines.pop();
+
+        for (let line of lines) {
+            if (line.startsWith("$RC2")) {
+                parseRC2(line);
+            }
+        }
+    }
+
+    function parseRC2(line) {
+        let starIdx = line.indexOf('*');
+        let data = (starIdx !== -1) ? line.substring(0, starIdx) : line;
+        let parts = data.split(',');
+
+        if (parts.length >= 7) {
+            let gLat = parseFloat(parts[3]) || 0;
+            let gLong = parseFloat(parts[4]) || 0;
+            let roll = parseFloat(parts[5]) || 0;
+            let pitch = parseFloat(parts[6]) || 0;
+            let rollRate = parseFloat(parts[7]) || 0;
+            let yawRate = parseFloat(parts[8]) || 0;
+            let alt = parseFloat(parts[9]) || 0;
+
+            updateTelemetry(roll, pitch, gLat, gLong, rollRate, yawRate, alt);
+        }
+    }
+
+    function updateTelemetry(roll, pitch, gLat, gLong, rollRate, yawRate, alt) {
+        state.roll = roll;
+        state.pitch = pitch;
+        state.gLat = gLat;
+        state.gLong = gLong;
+        state.rollRate = rollRate;
+        state.yawRate = yawRate;
+        state.altitude = alt;
+
+        if (roll < 0 && Math.abs(roll) > state.maxRollL) state.maxRollL = Math.abs(roll);
+        if (roll > 0 && roll > state.maxRollR) state.maxRollR = roll;
+        if (gLong < 0 && Math.abs(gLong) > state.maxBrake) state.maxBrake = Math.abs(gLong);
+        if (gLong > 0 && gLong > state.maxAccel) state.maxAccel = gLong;
+
+        if (isRecording) {
+            recordedData.push({
+                time: (Date.now() - recStartTime) / 1000,
+                roll: roll.toFixed(2),
+                pitch: pitch.toFixed(2),
+                gLat: gLat.toFixed(3),
+                gLong: gLong.toFixed(3),
+                rollRate: rollRate.toFixed(1),
+                yawRate: yawRate.toFixed(1),
+                alt: alt.toFixed(1)
+            });
+        }
+
+        analyzeCorner(roll, rollRate);
+        renderUI();
+    }
+
+    function analyzeCorner(roll, rollRate) {
+        let absRoll = Math.abs(roll);
+        let now = Date.now();
+
+        if (absRoll > 12.0) {
+            if (!inCorner) {
+                inCorner = true;
+                currentCorner = {
+                    isLeft: (roll < 0),
+                    peakRoll: absRoll,
+                    peakRate: Math.abs(rollRate),
+                    startTime: now
+                };
+            } else {
+                if (absRoll > currentCorner.peakRoll) currentCorner.peakRoll = absRoll;
+                if (Math.abs(rollRate) > currentCorner.peakRate) currentCorner.peakRate = Math.abs(rollRate);
+            }
+        } else if (inCorner && absRoll < 8.0) {
+            inCorner = false;
+            let dur = ((now - currentCorner.startTime) / 1000).toFixed(1);
+            if (currentCorner.peakRoll >= 18.0) {
+                cornerHistory.unshift({
+                    isLeft: currentCorner.isLeft,
+                    peakRoll: currentCorner.peakRoll.toFixed(1),
+                    peakRate: currentCorner.peakRate.toFixed(0),
+                    dur: dur
+                });
+                if (cornerHistory.length > 8) cornerHistory.pop();
+                renderCornerList();
+            }
+        }
+    }
+
+    function renderCornerList() {
+        const list = document.getElementById("cornerList");
+        document.getElementById("lblCornerCount").innerText = cornerHistory.length + " curve";
+        if (cornerHistory.length === 0) return;
+
+        list.innerHTML = cornerHistory.map(c => `
+            <div class="corner-pill">
+                <div class="corner-dir ${c.isLeft ? 'L' : 'R'}">${c.isLeft ? '◄ SINISTRA' : 'DESTRA ►'}</div>
+                <div class="corner-max">${c.peakRoll}°</div>
+                <div class="corner-rate">${c.peakRate}°/s • ${c.dur}s</div>
+            </div>
+        `).join('');
+    }
+
+    function renderUI() {
+        let absRoll = Math.abs(state.roll);
+        document.getElementById("lblRollDeg").innerText = absRoll.toFixed(1) + "°";
+        
+        let dirText = (absRoll < 2.0) ? "DIRITTO" : (state.roll < 0 ? "◄ SINISTRA" : "DESTRA ►");
+        let dirEl = document.getElementById("lblRollDir");
+        dirEl.innerText = dirText;
+        dirEl.style.color = (state.roll < -2) ? "var(--yamaha-cyan)" : (state.roll > 2 ? "var(--accent-orange)" : "var(--text-dim)");
+
+        document.getElementById("lblRollRate").innerText = state.rollRate.toFixed(0) + " °/s";
+        document.getElementById("lblMaxL").innerText = state.maxRollL.toFixed(1) + "°";
+        document.getElementById("lblMaxR").innerText = state.maxRollR.toFixed(1) + "°";
+
+        const alertEl = document.getElementById("alertFlash");
+        if (absRoll >= state.warningThreshold) {
+            alertEl.classList.add("active");
+            if (navigator.vibrate) navigator.vibrate(50);
+        } else {
+            alertEl.classList.remove("active");
+        }
+
+        let angleClamped = Math.max(-60, Math.min(60, state.roll));
+        let needle = document.getElementById("svgNeedle");
+        needle.setAttribute("transform", `rotate(${angleClamped} 150 150)`);
+
+        document.getElementById("lblGLong").innerText = (state.gLong > 0 ? "+" : "") + state.gLong.toFixed(2) + " G";
+        document.getElementById("lblPitch").innerText = (state.pitch > 0 ? "+" : "") + state.pitch.toFixed(1) + "°";
+        document.getElementById("lblAlt").innerText = state.altitude.toFixed(0) + " m";
+        document.getElementById("lblMaxBrake").innerText = "BRK: " + state.maxBrake.toFixed(2) + " G";
+        document.getElementById("lblMaxAccel").innerText = "ACC: " + state.maxAccel.toFixed(2) + " G";
+
+        let totalG = Math.sqrt(state.gLat * state.gLat + state.gLong * state.gLong);
+        document.getElementById("lblTotalG").innerText = totalG.toFixed(2) + " G";
+
+        let pitchFill = document.getElementById("pitchFill");
+        let pitchClamp = Math.max(-15, Math.min(15, state.pitch));
+        if (pitchClamp >= 0) {
+            pitchFill.style.left = "50%";
+            pitchFill.style.width = (pitchClamp / 15 * 50) + "%";
+            pitchFill.style.background = "var(--accent-orange)";
+        } else {
+            let w = (Math.abs(pitchClamp) / 15 * 50);
+            pitchFill.style.left = (50 - w) + "%";
+            pitchFill.style.width = w + "%";
+            pitchFill.style.background = "var(--yamaha-cyan)";
+        }
+
+        graphHistory.push({ roll: state.roll, gLong: state.gLong });
+        if (graphHistory.length > MAX_GRAPH_PTS) graphHistory.shift();
+
+        gTrail.push({ x: state.gLat, y: state.gLong });
+        if (gTrail.length > 25) gTrail.shift();
+    }
+
+    function resetMaxStats() {
+        state.maxRollL = 0; state.maxRollR = 0; state.maxBrake = 0; state.maxAccel = 0;
+        renderUI();
+    }
+
+    function tareZero() {
+        state.roll = 0; state.pitch = 0;
+        renderUI();
+    }
+
+    function toggleRecording() {
+        isRecording = !isRecording;
+        const btn = document.getElementById("btnRecord");
+        const lbl = document.getElementById("lblRecText");
+
+        if (isRecording) {
+            recordedData = [];
+            recStartTime = Date.now();
+            btn.classList.add("recording");
+            lbl.innerText = "STOP REC";
+        } else {
+            btn.classList.remove("recording");
+            lbl.innerText = "REC Sessione";
+            if (recordedData.length > 0) exportCsv();
+        }
+    }
+
+    function exportCsv() {
+        if (recordedData.length === 0) {
+            alert("Nessun dato registrato. Premi 'REC Sessione' prima di guidare!");
+            return;
+        }
+
+        let csv = "Time_s,Roll_deg,Pitch_deg,G_Lat,G_Long,RollRate_dps,YawRate_dps,Altitude_m\n";
+        for (let r of recordedData) {
+            csv += `${r.time},${r.roll},${r.pitch},${r.gLat},${r.gLong},${r.rollRate},${r.yawRate},${r.alt}\n`;
+        }
+
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `FZ8_Telemetry_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    const canvasG = document.getElementById("canvasGMeter");
+    const ctxG = canvasG.getContext("2d");
+
+    function drawGMeter() {
+        const w = canvasG.width; const h = canvasG.height; const cx = w / 2; const cy = h / 2; const r = w / 2 - 12;
+        ctxG.clearRect(0, 0, w, h);
+
+        ctxG.strokeStyle = "rgba(255,255,255,0.12)"; ctxG.lineWidth = 1;
+        ctxG.beginPath(); ctxG.arc(cx, cy, r * 0.33, 0, Math.PI * 2); ctxG.stroke();
+        ctxG.beginPath(); ctxG.arc(cx, cy, r * 0.66, 0, Math.PI * 2); ctxG.stroke();
+        ctxG.beginPath(); ctxG.arc(cx, cy, r, 0, Math.PI * 2); ctxG.stroke();
+
+        ctxG.beginPath();
+        ctxG.moveTo(cx, 10); ctxG.lineTo(cx, h - 10);
+        ctxG.moveTo(10, cy); ctxG.lineTo(w - 10, cy);
+        ctxG.stroke();
+
+        for (let i = 0; i < gTrail.length; i++) {
+            let pt = gTrail[i];
+            let alpha = (i / gTrail.length) * 0.6;
+            let px = cx + (pt.x / 1.5) * r;
+            let py = cy - (pt.y / 1.5) * r;
+            ctxG.fillStyle = `rgba(0, 212, 255, ${alpha})`;
+            ctxG.beginPath(); ctxG.arc(px, py, 3, 0, Math.PI * 2); ctxG.fill();
+        }
+
+        let liveX = cx + (state.gLat / 1.5) * r;
+        let liveY = cy - (state.gLong / 1.5) * r;
+        liveX = Math.max(cx - r, Math.min(cx + r, liveX));
+        liveY = Math.max(cy - r, Math.min(cy + r, liveY));
+
+        ctxG.fillStyle = "#ff1744"; ctxG.beginPath(); ctxG.arc(liveX, liveY, 7, 0, Math.PI * 2); ctxG.fill();
+        requestAnimationFrame(drawGMeter);
+    }
+    requestAnimationFrame(drawGMeter);
+
+    const canvasGraph = document.getElementById("canvasGraph");
+    const ctxGr = canvasGraph.getContext("2d");
+
+    function drawGraph() {
+        const w = canvasGraph.width; const h = canvasGraph.height; const cy = h / 2;
+        ctxGr.clearRect(0, 0, w, h);
+
+        ctxGr.strokeStyle = "rgba(255,255,255,0.08)"; ctxGr.lineWidth = 1;
+        ctxGr.beginPath(); ctxGr.moveTo(0, cy); ctxGr.lineTo(w, cy); ctxGr.stroke();
+
+        if (graphHistory.length < 2) { requestAnimationFrame(drawGraph); return; }
+
+        const step = w / (MAX_GRAPH_PTS - 1);
+        ctxGr.strokeStyle = "#00d4ff"; ctxGr.lineWidth = 2.5; ctxGr.beginPath();
+        for (let i = 0; i < graphHistory.length; i++) {
+            let x = i * step;
+            let y = cy + (graphHistory[i].roll / 60) * (cy - 10);
+            if (i === 0) ctxGr.moveTo(x, y);
+            else ctxGr.lineTo(x, y);
+        }
+        ctxGr.stroke();
+
+        ctxGr.strokeStyle = "#ff9100"; ctxGr.lineWidth = 1.8; ctxGr.beginPath();
+        for (let i = 0; i < graphHistory.length; i++) {
+            let x = i * step;
+            let y = cy - (graphHistory[i].gLong / 1.5) * (cy - 10);
+            if (i === 0) ctxGr.moveTo(x, y);
+            else ctxGr.lineTo(x, y);
+        }
+        ctxGr.stroke();
+
+        requestAnimationFrame(drawGraph);
+    }
+    requestAnimationFrame(drawGraph);
+</script>
+</body>
+</html>
