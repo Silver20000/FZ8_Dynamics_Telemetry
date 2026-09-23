@@ -27,8 +27,8 @@ uint32_t lastDisplayMillis = 0;
 uint32_t lastBaroMillis = 0;
 uint32_t lastLogMillis = 0;
 
-// Radio Mutual Exclusion State
-RadioMode currentRadioMode = RADIO_MODE_DASHBOARD;
+// Radio Mutual Exclusion State (Default: Bluetooth BLE 20Hz for Smartphone App)
+RadioMode currentRadioMode = RADIO_MODE_RACECHRONO;
 
 // Button state machine
 bool lastButtonState = HIGH;
@@ -213,13 +213,13 @@ void setup() {
     // 4. Initialize LittleFS Flash Datalogger (Compact 20B struct + RAM buffer)
     sessionLogger.begin();
 
-    // 5. Start in Dashboard Mode (Wi-Fi AP + STA) by default
-    Serial.println("[SYSTEM] Avvio Modalita Dashboard (Wi-Fi AP + STA)...");
-    webServer.start(&motoFilter, &currentDynamics, &uiDisplay, &sessionLogger, &bleTelemetry);
-    uiDisplay.setWifiStatus(true);
-    uiDisplay.setRadioMode(RADIO_MODE_DASHBOARD);
-    webServer.setRadioMode(RADIO_MODE_DASHBOARD);
-    digitalWrite(STATUS_LED_PIN, LOW); // LED ON: Wi-Fi active
+    // 5. Start in BLE Motorcycle Telemetry Mode by default (Zero RF power spikes, 20Hz stream)
+    Serial.println("[SYSTEM] Avvio Modalita Telemetria Bluetooth (BLE 20Hz)...");
+    bleTelemetry.begin();
+    uiDisplay.setWifiStatus(false);
+    uiDisplay.setRadioMode(RADIO_MODE_RACECHRONO);
+    webServer.setRadioMode(RADIO_MODE_RACECHRONO);
+    digitalWrite(STATUS_LED_PIN, HIGH); // LED OFF: BLE low power mode
 
     lastImuMicros = micros();
     lastDisplayMillis = millis();
