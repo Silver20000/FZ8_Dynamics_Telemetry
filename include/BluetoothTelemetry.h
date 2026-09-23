@@ -6,6 +6,7 @@
 #include <functional>
 #include "Config.h"
 #include "MotorcycleFilter.h"
+#include "DynamicAutoCalibrator.h"
 
 // RaceChrono DIY Service and Characteristic UUIDs
 #define RACECHRONO_SERVICE_UUID        "00001ff8-0000-1000-8000-00805f9b34fb"
@@ -115,7 +116,7 @@ public:
         }
     }
 
-    void update(const MotorcycleDynamics& dyn) {
+    void update(const MotorcycleDynamics& dyn, const DynamicAutoCalibrator& autoCal) {
         if (!_enabled || !_deviceConnected || !_pCharacteristic) return;
 
         uint32_t now = millis();
@@ -123,20 +124,22 @@ public:
         _lastUpdateMillis = now;
 
         // RaceChrono DIY NMEA Format v2 (20Hz):
-        // $RC2,[time_ms],[count],[g_lat],[g_long],[roll_deg],[pitch_deg],[roll_rate],[yaw_rate],[altitude],[tps_pct]*[checksum]\r\n
-        char sentence[140];
+        // $RC2,[time_ms],[count],[g_lat],[g_long],[roll_deg],[pitch_deg],[roll_rate],[yaw_rate],[altitude],[tps_pct],[autocal_pct],[autocal_samples]*[checksum]\r\n
+        char sentence[160];
         int len = snprintf(sentence, sizeof(sentence),
-            "$RC2,%lu,%lu,%.2f,%.2f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f",
+            "$RC2,%lu,%lu,%.2f,%.2f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%u,%lu",
             (unsigned long)now,
             (unsigned long)_packetCounter++,
-            dyn.gLateral,        // Canale 1: G Laterale (Centripeta)
-            dyn.gLongitudinal,   // Canale 2: G Longitudinale (+accel, -frenata)
-            dyn.rollDeg,         // Canale 3: Angolo di Piega (gradi)
-            dyn.pitchDeg,        // Canale 4: Beccheggio (gradi)
-            dyn.rollRateDps,     // Canale 5: Velocita di rollio (deg/s)
-            dyn.yawRateDps,      // Canale 6: Velocita di imbardata (deg/s)
-            dyn.altitudeM,       // Canale 7: Quota barometrica (metri)
-            dyn.tpsPercent       // Canale 8: % Apertura Farfalla Gas (TPS)
+            dyn.gLateral,
+            dyn.gLongitudinal,
+            dyn.rollDeg,
+            dyn.pitchDeg,
+            dyn.rollRateDps,
+            dyn.yawRateDps,
+            dyn.altitudeM,
+            dyn.tpsPercent,
+            autoCal.getProgressPercent(),
+            (unsigned long)autoCal.getStraightSamples()
         );
 
         // Calcola Checksum XOR standard NMEA
@@ -145,7 +148,7 @@ public:
             checksum ^= (uint8_t)sentence[i];
         }
 
-        char fullPacket[150];
+        char fullPacket[170];
         int totalLen = snprintf(fullPacket, sizeof(fullPacket), "%s*%02X\r\n", sentence, checksum);
 
         _pCharacteristic->setValue((uint8_t*)fullPacket, totalLen);

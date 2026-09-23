@@ -10,10 +10,11 @@
 #include "SessionLogger.h"
 #include "BluetoothTelemetry.h"
 #include "EspNowProtocol.h"
+#include "DynamicAutoCalibrator.h"
 
 // ==============================================================================
 // YAMAHA FZ8 MOTORCYCLE DYNAMICS MASTER UNIT (UNDER-SEAT / TAIL NODE)
-// High-Performance 100Hz IMU Kinematic Gating + TPS Sensor + 20Hz BLE + 50Hz ESP-NOW
+// High-Performance 100Hz IMU + TPS + 3-Min Auto-Calibrator + BLE + ESP-NOW
 // ==============================================================================
 
 // Global Instances
@@ -21,6 +22,7 @@ SensorsGY89 imuSensors;
 MotorcycleFilter motoFilter;
 SessionLogger sessionLogger;
 BluetoothTelemetry bleTelemetry;
+DynamicAutoCalibrator autoCal;
 Preferences prefs;
 
 // Dynamics State
@@ -83,7 +85,7 @@ void saveTpsWot() {
 
 void updateTps() {
     uint16_t rawAdc = analogRead(TPS_ADC_PIN);
-    // Filtro IIR passa-basso rapido (immunità a disturbi bobine/candele)
+    // Filtro IIR passa-basso rapido
     filteredTpsAdc = 0.85f * filteredTpsAdc + 0.15f * (float)rawAdc;
 
     float pct = 0.0f;
@@ -91,6 +93,7 @@ void updateTps() {
         pct = (filteredTpsAdc - tpsMinAdc) * 100.0f / (float)(tpsMaxAdc - tpsMinAdc);
     }
     currentDynamics.tpsPercent = constrain(pct, 0.0f, 100.0f);
+    currentDynamics.tpsRawAdc = rawAdc;
 }
 
 void initEspNowBroadcaster() {
@@ -105,7 +108,7 @@ void initEspNowBroadcaster() {
         
         if (esp_now_add_peer(&peerInfo) == ESP_OK) {
             espNowActive = true;
-            Serial.println("[ESPNOW] Broadcaster attivo a 50Hz (Canale 1) per Cruscotto Wireless!");
+            Serial.println("[ESPNOW] Broadcaster attivo a 50Hz per Cruscotto Wireless!");
         }
     } else {
         Serial.println("[ESPNOW] Inizializzazione ESP-NOW fallita!");
@@ -136,6 +139,7 @@ void sendEspNowTelemetry(const MotorcycleDynamics& dyn) {
     if (dyn.isBraking)     flags |= (1 << 1);
     if (dyn.isAccelerating)flags |= (1 << 2);
     if (sessionLogger.isLogging()) flags |= (1 << 3);
+    if (autoCal.isRunning())       flags |= (1 << 4);
     espNowPacket.flags = flags;
 
     esp_now_send(espNowBroadcastAddress, (uint8_t*)&espNowPacket, sizeof(espNowPacket));
@@ -150,22 +154,25 @@ void handleButton() {
         buttonHandled = false;
     } else if (currentBtn == LOW && !buttonHandled) {
         uint32_t duration = now - buttonPressStart;
-        if (duration >= 2000) {
-            // Long Press (>= 2s): Start / Stop Flash Datalogger
-            if (sessionLogger.isLogging()) {
-                sessionLogger.stopSession();
-                Serial.println("[BUTTON] Datalogger STOP");
+        if (duration >= 3000) {
+            // Very Long Press (>= 3s): Toggle 3-Minute Auto-Calibration
+            if (autoCal.isRunning()) {
+                autoCal.cancel();
             } else {
-                sessionLogger.startSession();
-                Serial.println("[BUTTON] Datalogger START");
+                autoCal.start();
             }
+            buttonHandled = true;
+        } else if (duration >= 1500 && duration < 3000) {
+            // Medium Press (1.5s - 3s): Start / Stop Flash Datalogger
+            if (sessionLogger.isLogging()) sessionLogger.stopSession();
+            else sessionLogger.startSession();
             buttonHandled = true;
         }
     } else if (currentBtn == HIGH && lastButtonState == LOW) {
         if (!buttonHandled) {
             uint32_t duration = now - buttonPressStart;
-            if (duration >= 50 && duration < 2000) {
-                // Short Click (< 2s): Zero Tare
+            if (duration >= 50 && duration < 1500) {
+                // Short Click (< 1.5s): Zero Tare
                 motoFilter.tareZero();
                 Serial.println("[BUTTON] Zero Tare Salvato in Flash!");
             }
@@ -180,10 +187,14 @@ void handleSerial() {
     while (Serial.available()) {
         char c = Serial.read();
         if (c == 's' || c == 'S') {
-            Serial.printf("[STATUS] Roll: %.1f deg, Pitch: %.1f deg, GLat: %.2f G, GLong: %.2f G, TPS: %.1f%% (ADC:%d)\n",
+            Serial.printf("[STATUS] Roll: %.1f deg, Pitch: %.1f deg, GLat: %.2f G, GLong: %.2f G, TPS: %.1f%% (ADC:%d) | AutoCal: %s (%d%%)\n",
                 currentDynamics.rollDeg, currentDynamics.pitchDeg,
                 currentDynamics.gLateral, currentDynamics.gLongitudinal,
-                currentDynamics.tpsPercent, (int)filteredTpsAdc);
+                currentDynamics.tpsPercent, (int)filteredTpsAdc,
+                autoCal.isRunning() ? "IN CORSO" : "IDLE", autoCal.getProgressPercent());
+        } else if (c == 'a' || c == 'A') {
+            if (autoCal.isRunning()) autoCal.cancel();
+            else autoCal.start();
         } else if (c == 't' || c == 'T') {
             motoFilter.tareZero();
             Serial.println("[SERIAL] Zero Tare Eseguito!");
@@ -212,7 +223,7 @@ void setup() {
     Serial.begin(115200);
     delay(200);
     Serial.println("\n================================================================");
-    Serial.println(" Yamaha FZ8 Dynamics Telemetry Master Unit (Tail Node + TPS)");
+    Serial.println(" Yamaha FZ8 Dynamics Telemetry Master Unit (Tail Node + AutoCal)");
     Serial.println(" ESP32-C3 + GY-89 (10-DOF) | Dual Radio: BLE + ESP-NOW");
     Serial.println("================================================================");
 
@@ -222,8 +233,8 @@ void setup() {
     digitalWrite(STATUS_LED_PIN, LOW); // LED ON at boot
 
     // Analog Inputs Configuration (TPS on GPIO 7)
-    analogReadResolution(12); // 0 - 4095
-    analogSetPinAttenuation(TPS_ADC_PIN, ADC_11db); // 0 - 3.1V Full Scale
+    analogReadResolution(12);
+    analogSetPinAttenuation(TPS_ADC_PIN, ADC_11db);
     loadTpsCalibration();
 
     // 1. Initialize GY-89 10-DOF I2C Sensors (400 kHz Fast-Mode)
@@ -251,6 +262,10 @@ void setup() {
         } else if (cmd == "SCREEN_NEXT") {
             selectedScreenIndex = (selectedScreenIndex + 1) % 9;
             Serial.printf("[BLE EXEC] Next Screen: %d\n", selectedScreenIndex);
+        } else if (cmd == "AUTOCAL_START") {
+            autoCal.start();
+        } else if (cmd == "AUTOCAL_STOP") {
+            autoCal.cancel();
         } else if (cmd == "TARE") {
             motoFilter.tareZero();
             Serial.println("[BLE EXEC] Zero Tare Salvato!");
@@ -291,7 +306,7 @@ void setup() {
     lastEspNowMillis = millis();
     lastHeartbeatMillis = millis();
     
-    Serial.println("[SYSTEM] *** Master Node operativo a 100Hz + TPS attivo! ***\n");
+    Serial.println("[SYSTEM] *** Master Node operativo a 100Hz + AutoCal pronto! ***\n");
 }
 
 void loop() {
@@ -307,6 +322,9 @@ void loop() {
         imuSensors.readIMU(rawImu);
         motoFilter.update(rawImu, currentDynamics);
         updateTps();
+
+        // 3-Minute Dynamic Auto-Calibration Update
+        autoCal.update(currentDynamics, (uint16_t)filteredTpsAdc, motoFilter, prefs);
     }
 
     // ==========================================================================
@@ -320,7 +338,7 @@ void loop() {
     // ==========================================================================
     // 3. BLE 20Hz TELEMETRY STREAM TO SMARTPHONE WEB APP / RACECHRONO
     // ==========================================================================
-    bleTelemetry.update(currentDynamics);
+    bleTelemetry.update(currentDynamics, autoCal);
 
     // ==========================================================================
     // 4. LOW PRIORITY: BMP180 BAROMETER STATE MACHINE (every 500ms)
@@ -343,8 +361,17 @@ void loop() {
 
     if (currentMillis - lastHeartbeatMillis >= 1000) {
         lastHeartbeatMillis = currentMillis;
-        digitalWrite(STATUS_LED_PIN, LOW);
-        delayMicroseconds(20000);
-        digitalWrite(STATUS_LED_PIN, HIGH);
+        if (autoCal.isRunning()) {
+            // Fast double blink when Auto-Calibration is running
+            digitalWrite(STATUS_LED_PIN, LOW); delayMicroseconds(40000);
+            digitalWrite(STATUS_LED_PIN, HIGH); delayMicroseconds(40000);
+            digitalWrite(STATUS_LED_PIN, LOW); delayMicroseconds(40000);
+            digitalWrite(STATUS_LED_PIN, HIGH);
+        } else {
+            // Standard single heartbeat blink
+            digitalWrite(STATUS_LED_PIN, LOW);
+            delayMicroseconds(20000);
+            digitalWrite(STATUS_LED_PIN, HIGH);
+        }
     }
 }
