@@ -86,26 +86,29 @@ public:
         if (now - _lastUpdateMillis < BLE_UPDATE_INTERVAL_MS) return;
         _lastUpdateMillis = now;
 
-        // RaceChrono DIY format:
-        // $RC2,[time],[count],[x_acc],[y_acc],[z_acc],[roll],[pitch],[yaw_rate]*[checksum]\r\n
-        char sentence[100];
+        // RaceChrono DIY NMEA Format v2 (20Hz):
+        // $RC2,[time_ms],[count],[g_lat],[g_long],[roll_deg],[pitch_deg],[roll_rate],[yaw_rate],[altitude]*[checksum]\r\n
+        char sentence[128];
         int len = snprintf(sentence, sizeof(sentence),
-            "$RC2,,%lu,%lu,,%.2f,%.2f,%.1f,%.1f",
+            "$RC2,%lu,%lu,%.2f,%.2f,%.1f,%.1f,%.1f,%.1f,%.1f",
             (unsigned long)now,
             (unsigned long)_packetCounter++,
-            dyn.gLateral,        // Lateral G (centripetal)
-            dyn.gLongitudinal,   // Longitudinal G (+accel, -brake)
-            dyn.rollDeg,         // Lean Angle
-            dyn.pitchDeg         // Dive / Squat
+            dyn.gLateral,        // Canale 1: G Laterale (Centripeta)
+            dyn.gLongitudinal,   // Canale 2: G Longitudinale (+accel, -frenata)
+            dyn.rollDeg,         // Canale 3: Angolo di Piega (gradi)
+            dyn.pitchDeg,        // Canale 4: Beccheggio (gradi)
+            dyn.rollRateDps,     // Canale 5: Velocità di rollio (deg/s)
+            dyn.yawRateDps,      // Canale 6: Velocità di imbardata (deg/s)
+            dyn.altitudeM        // Canale 7: Quota barometrica (metri)
         );
 
-        // Compute XOR checksum
+        // Calcola Checksum XOR standard NMEA
         uint8_t checksum = 0;
-        for (int i = 1; i < len; i++) { // Skip '$'
+        for (int i = 1; i < len; i++) { // Salta '$'
             checksum ^= (uint8_t)sentence[i];
         }
 
-        char fullPacket[120];
+        char fullPacket[140];
         int totalLen = snprintf(fullPacket, sizeof(fullPacket), "%s*%02X\r\n", sentence, checksum);
 
         _pCharacteristic->setValue((uint8_t*)fullPacket, totalLen);
