@@ -64,7 +64,7 @@ public:
 
             NimBLEService* pService = _pServer->createService(RACECHRONO_SERVICE_UUID);
             
-            // 1. Data Characteristic (Notify 20Hz Telemetry)
+            // 1. Data Characteristic (Notify 30Hz Telemetry)
             _pCharacteristic = pService->createCharacteristic(
                 RACECHRONO_CHARACTERISTIC_UUID,
                 NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
@@ -103,7 +103,8 @@ public:
         else begin();
     }
 
-    void onConnect(NimBLEServer* pServer) override {
+    void onConnect(NimBLEServer* pServer, ble_gap_conn_desc* desc) override {
+        pServer->updateConnParams(desc->conn_handle, 12, 24, 0, 400);
         _deviceConnected = true;
         Serial.println("[BLE] Smartphone connesso via NimBLE!");
     }
@@ -123,7 +124,7 @@ public:
         if (now - _lastUpdateMillis < BLE_UPDATE_INTERVAL_MS) return;
         _lastUpdateMillis = now;
 
-        // RaceChrono DIY NMEA Format v2 (20Hz):
+        // RaceChrono DIY NMEA Format v2 (30Hz):
         // $RC2,[time_ms],[count],[g_lat],[g_long],[roll_deg],[pitch_deg],[roll_rate],[yaw_rate],[altitude],[tps_pct],[autocal_pct],[autocal_samples],[heading],[cardinal],[head_valid],[d_plus],[temp]*[checksum]\r\n
         char sentence[200];
         int len = snprintf(sentence, sizeof(sentence),

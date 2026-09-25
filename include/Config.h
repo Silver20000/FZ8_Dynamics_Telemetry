@@ -99,7 +99,7 @@ enum RadioMode {
     RADIO_MODE_RACECHRONO = 1   // NimBLE attivo a 20Hz, Wi-Fi OFF (zero contesa RF, zero latenza)
 };
 
-#define BLE_UPDATE_INTERVAL_MS  50      // 20 Hz update rate for RaceChrono BLE
+#define BLE_UPDATE_INTERVAL_MS  33      // 30 Hz update rate for RaceChrono / Web App BLE
 #define BLE_DEVICE_NAME         "FZ8-Telemetry"
 
 // Corner Analyzer (Isteresi Chicane)
