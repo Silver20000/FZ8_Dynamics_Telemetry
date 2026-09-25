@@ -533,6 +533,55 @@
             cursor: pointer;
         }
         .toggle-btn.on {
+
+        /* Map Mode Pills & Badges */
+        .map-mode-bar {
+            display: flex; gap: 6px; margin: 8px 0 4px 0; width: 100%;
+        }
+        .map-mode-pill {
+            flex: 1; background: rgba(255,255,255,0.06); border: 1px solid var(--border-card);
+            color: var(--text-dim); font-size: 10px; font-weight: 700; padding: 6px 4px;
+            border-radius: 8px; cursor: pointer; text-align: center; transition: all 0.2s;
+        }
+        .map-mode-pill.active {
+            background: rgba(0, 212, 255, 0.2); border-color: var(--yamaha-cyan); color: var(--yamaha-cyan); font-weight: 800;
+        }
+        .apex-badge-marker {
+            background: transparent; border: none;
+        }
+        .apex-badge {
+            background: rgba(10, 14, 23, 0.92); border: 1.5px solid; border-radius: 6px;
+            padding: 2px 5px; font-size: 9px; font-weight: 900; white-space: nowrap;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.6); transform: translate(-50%, -100%);
+        }
+        .apex-badge.sx { border-color: var(--yamaha-cyan); color: var(--yamaha-cyan); }
+        .apex-badge.dx { border-color: var(--accent-orange); color: var(--accent-orange); }
+        .apex-badge.limit { border-color: #d500f9; color: #d500f9; }
+
+        /* Saved Sessions Card */
+        .session-card-item {
+            background: var(--bg-card); border: 1px solid var(--border-card);
+            border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 6px;
+            margin-bottom: 8px; transition: border-color 0.2s;
+        }
+        .session-card-item:hover { border-color: rgba(0, 212, 255, 0.4); }
+        .session-header { display: flex; justify-content: space-between; align-items: center; }
+        .session-date { font-size: 12px; font-weight: 800; color: var(--text-main); }
+        .session-badge { background: rgba(255, 255, 255, 0.08); padding: 2px 6px; border-radius: 6px; font-size: 10px; color: var(--text-dim); }
+        .session-stats-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+            background: rgba(0, 0, 0, 0.25); padding: 6px; border-radius: 8px; text-align: center;
+        }
+        .s-stat-lbl { font-size: 8px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; display: block; }
+        .s-stat-val { font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .session-actions { display: flex; gap: 6px; margin-top: 4px; }
+        .session-btn {
+            flex: 1; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--border-card);
+            color: var(--text-main); border-radius: 8px; padding: 6px 4px; font-size: 10px; font-weight: 700;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;
+        }
+        .session-btn.primary { background: rgba(0, 102, 255, 0.25); border-color: var(--yamaha-blue); color: var(--yamaha-cyan); }
+        .session-btn.delete { flex: 0 0 32px; color: var(--accent-red); }
             background: linear-gradient(135deg, var(--yamaha-blue), var(--yamaha-cyan));
             color: white;
             border: none;
@@ -899,28 +948,36 @@
                 </div>
             </div>
 
+            <!-- Heatmap Mode Bar -->
+            <div class="map-mode-bar">
+                <button class="map-mode-pill active" id="pillModeLean" onclick="setMapColorMode('lean')">📐 Piega SX/DX</button>
+                <button class="map-mode-pill" id="pillModeSpeed" onclick="setMapColorMode('speed')">⚡ Velocità</button>
+                <button class="map-mode-pill" id="pillModeG" onclick="setMapColorMode('gforce')">🛑 G-Force</button>
+            </div>
+
             <!-- Heatmap Legend -->
-            <div class="map-legend" style="margin-top:8px;">
-                <div class="legend-item"><span class="legend-dot" style="background:#00e676;"></span> Diritto</div>
-                <div class="legend-item"><span class="legend-dot" style="background:#00d4ff;"></span> Piega SX (&gt;15°)</div>
-                <div class="legend-item"><span class="legend-dot" style="background:#ff9100;"></span> Piega DX (&gt;15°)</div>
-                <div class="legend-item"><span class="legend-dot" style="background:#ff1744;"></span> Limite (&gt;38°)</div>
+            <div class="map-legend" id="mapLegendContent" style="flex-wrap:wrap; gap:6px;">
+                <div class="legend-item"><span class="legend-dot" style="background:#00e676;"></span> Diritto (&lt;12°)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#00d4ff;"></span> SX (12-32°)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#ff9100;"></span> DX (12-32°)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#ff1744;"></span> Forte (&gt;35°)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#d500f9;"></span> Gomito (&gt;42°)</div>
             </div>
         </div>
 
         <!-- GPS Actions Bar -->
         <div class="actions-bar">
-            <button class="action-btn" onclick="exportGpx()">
+            <button class="action-btn" onclick="saveCurrentSessionToPhone()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                    <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
                 </svg>
-                <span>Esporta GPX</span>
+                <span>Salva Sessione</span>
             </button>
-            <button class="action-btn" onclick="exportCsv()">
+            <button class="action-btn" onclick="loadDemoRoute()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                    <path d="M14 6l-3.75 5 2.85 3.8-1.6 1.2L7.2 10.5 2 17h20L14 6z"/>
                 </svg>
-                <span>Scarica CSV</span>
+                <span>Passo Demo</span>
             </button>
             <button class="action-btn" onclick="initGpsTracking(true)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -928,6 +985,17 @@
                 </svg>
                 <span>Riavvia GPS</span>
             </button>
+        </div>
+
+        <!-- Saved Sessions in Phone Memory Card -->
+        <div class="card" style="padding:12px;">
+            <div class="lean-header" style="margin-bottom:8px;">
+                <span>📱 Sessioni Salvate sul Telefono</span>
+                <span id="lblSessionCount" style="color:var(--yamaha-cyan); font-weight:800; font-size:11px;">0 sessioni</span>
+            </div>
+            <div id="savedSessionsList" style="display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto;">
+                <!-- Dynamically populated from localStorage -->
+            </div>
         </div>
     </div>
 
@@ -1668,22 +1736,7 @@
                         totalGpsDistM += dist;
                         document.getElementById("lblGpsDist").innerText = `${(totalGpsDistM / 1000).toFixed(2)} km`;
                         
-                        // Pick color based on Lean Angle
-                        let color = "#00e676"; // Green straight
-                        let absRoll = Math.abs(state.roll);
-                        if (absRoll >= 38.0) color = "#ff1744"; // Red extreme lean
-                        else if (state.roll < -15.0) color = "#00d4ff"; // Cyan Left
-                        else if (state.roll > 15.0) color = "#ff9100"; // Orange Right
-
-                        if (map) {
-                            let seg = L.polyline([[lastGpsPos.lat, lastGpsPos.lon], [lat, lon]], {
-                                color: color,
-                                weight: 4.5,
-                                opacity: 0.9,
-                                lineJoin: 'round'
-                            }).addTo(map);
-                            gpsTrackSegments.push(seg);
-                        }
+                        renderGpsTrackSegment(lastGpsPos, { lat, lon }, state.roll, speedKmh, alt, state.gLong);
 
                         lastGpsPos = { lat, lon };
                     }
@@ -1731,8 +1784,398 @@
             if (map) map.removeLayer(seg);
         }
         gpsTrackSegments = [];
+        for (let m of gpsApexMarkers) {
+            if (map) map.removeLayer(m);
+        }
+        gpsApexMarkers = [];
         totalGpsDistM = 0;
         document.getElementById("lblGpsDist").innerText = "0.0 km";
+    }
+
+    // =========================================================================
+    // COLOR-CODED MAP LOGIC & PHONE STORAGE SESSIONS
+    // =========================================================================
+    let mapColorMode = 'lean';
+    let gpsApexMarkers = [];
+    let currentCornerPeak = 0;
+    let currentCornerApexPos = null;
+
+    function setMapColorMode(mode) {
+        mapColorMode = mode;
+        document.querySelectorAll('.map-mode-pill').forEach(p => p.classList.remove('active'));
+        if (mode === 'lean') document.getElementById('pillModeLean').classList.add('active');
+        if (mode === 'speed') document.getElementById('pillModeSpeed').classList.add('active');
+        if (mode === 'gforce') document.getElementById('pillModeG').classList.add('active');
+
+        const leg = document.getElementById('mapLegendContent');
+        if (mode === 'lean') {
+            leg.innerHTML = `
+                <div class="legend-item"><span class="legend-dot" style="background:#00e676;"></span> Diritto (&lt;12°)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#00d4ff;"></span> SX (12-32°)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#ff9100;"></span> DX (12-32°)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#ff1744;"></span> Forte (&gt;35°)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#d500f9;"></span> Gomito (&gt;42°)</div>
+            `;
+        } else if (mode === 'speed') {
+            leg.innerHTML = `
+                <div class="legend-item"><span class="legend-dot" style="background:#0066ff;"></span> &lt;40 km/h</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#00d4ff;"></span> 40-70 km/h</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#00e676;"></span> 70-100 km/h</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#ffd600;"></span> 100-130 km/h</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#ff1744;"></span> &gt;130 km/h</div>
+            `;
+        } else if (mode === 'gforce') {
+            leg.innerHTML = `
+                <div class="legend-item"><span class="legend-dot" style="background:#ff1744;"></span> Staccata (&lt;-0.4G)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#00d4ff;"></span> Neutro (~0G)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#00e676;"></span> Trazione (&gt;0.3G)</div>
+            `;
+        }
+    }
+
+    function getSegmentColor(roll, speed, gLong) {
+        if (mapColorMode === 'speed') {
+            let spd = parseFloat(speed) || 0;
+            if (spd < 40) return "#0066ff";
+            if (spd < 70) return "#00d4ff";
+            if (spd < 100) return "#00e676";
+            if (spd < 130) return "#ffd600";
+            return "#ff1744";
+        }
+        if (mapColorMode === 'gforce') {
+            let gl = parseFloat(gLong) || 0;
+            if (gl < -0.40) return "#ff1744";
+            if (gl > +0.30) return "#00e676";
+            return "#00d4ff";
+        }
+        // Default: Lean Angle (SX / DX)
+        let r = parseFloat(roll) || 0;
+        let abs = Math.abs(r);
+        if (abs < 12.0) return "#00e676";
+        if (abs >= 42.0) return "#d500f9";
+        if (abs >= 35.0) return (r < 0) ? "#0055ff" : "#ff1744";
+        if (r < 0) return "#00d4ff";
+        return "#ff9100";
+    }
+
+    function renderGpsTrackSegment(p1, p2, roll, speed, alt, gLong) {
+        if (!map) return;
+        let color = getSegmentColor(roll, speed, gLong);
+        let absRoll = Math.abs(roll);
+        let dir = (roll < 0) ? "SX" : "DX";
+
+        let seg = L.polyline([[p1.lat, p1.lon], [p2.lat, p2.lon]], {
+            color: color,
+            weight: 5,
+            opacity: 0.95,
+            lineJoin: 'round',
+            lineCap: 'round'
+        }).addTo(map);
+
+        seg.bindPopup(`
+            <div style="font-family:sans-serif;font-size:12px;color:#0a0e17;line-height:1.4;">
+                <b style="font-size:13px;color:${color}">${absRoll >= 12 ? 'Curva ' + dir + ' ' + absRoll.toFixed(1) + '°' : 'Rettilineo'}</b><br>
+                <span>⚡ Velocità: <b>${Math.round(speed)} km/h</b></span><br>
+                <span>⛰️ Quota: <b>${Math.round(alt)} m</b></span>
+            </div>
+        `);
+        gpsTrackSegments.push(seg);
+
+        if (absRoll > 18.0) {
+            if (absRoll > currentCornerPeak) {
+                currentCornerPeak = absRoll;
+                currentCornerApexPos = { lat: p2.lat, lon: p2.lon, roll: roll };
+            }
+        } else if (currentCornerPeak >= 20.0 && currentCornerApexPos) {
+            addApexMarker(currentCornerApexPos.lat, currentCornerApexPos.lon, currentCornerApexPos.roll);
+            currentCornerPeak = 0;
+            currentCornerApexPos = null;
+        }
+    }
+
+    function addApexMarker(lat, lon, roll) {
+        let abs = Math.abs(roll);
+        let dir = (roll < 0) ? "SX" : "DX";
+        let cls = (abs >= 42.0) ? "limit" : ((roll < 0) ? "sx" : "dx");
+        let html = `<div class="apex-badge ${cls}">${dir} ${abs.toFixed(0)}°</div>`;
+        let icon = L.divIcon({
+            className: 'apex-badge-marker',
+            html: html,
+            iconSize: [42, 20],
+            iconAnchor: [21, 20]
+        });
+        let m = L.marker([lat, lon], { icon: icon }).addTo(map);
+        gpsApexMarkers.push(m);
+    }
+
+    const SESSIONS_STORAGE_KEY = "FZ8_PHONE_SESSIONS_V1";
+
+    function getSavedSessions() {
+        try {
+            return JSON.parse(localStorage.getItem(SESSIONS_STORAGE_KEY)) || [];
+        } catch(e) { return []; }
+    }
+
+    function setSavedSessions(sessions) {
+        try {
+            localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+        } catch(e) { console.error("Storage error:", e); }
+    }
+
+    function saveCurrentSessionToPhone(customSession = null) {
+        let session = customSession;
+        if (!session) {
+            if (recordedData.length === 0) {
+                alert("Nessun dato registrato. Avvia prima 'REC Sessione' per guidare e registrare!");
+                return;
+            }
+            let maxSpd = 0;
+            for (let r of recordedData) {
+                let s = parseFloat(r.speedKmh) || 0;
+                if (s > maxSpd) maxSpd = s;
+            }
+            session = {
+                id: "sess_" + Date.now(),
+                dateStr: new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' }) + " " + new Date().toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' }),
+                durationSec: Math.round((Date.now() - recStartTime) / 1000),
+                distanceKm: (totalGpsDistM / 1000).toFixed(2),
+                maxRollL: state.maxRollL.toFixed(1),
+                maxRollR: state.maxRollR.toFixed(1),
+                maxSpeedKmh: maxSpd.toFixed(0),
+                samplesCount: recordedData.length,
+                points: [...recordedData]
+            };
+        }
+
+        let list = getSavedSessions();
+        list.unshift(session);
+        setSavedSessions(list);
+        renderSavedSessionsList();
+        alert(`Sessione del ${session.dateStr} salvata con successo sul telefono! (${session.points.length} punti)`);
+    }
+
+    function renderSavedSessionsList() {
+        const container = document.getElementById("savedSessionsList");
+        const countEl = document.getElementById("lblSessionCount");
+        if (!container) return;
+
+        let sessions = getSavedSessions();
+        countEl.innerText = `${sessions.length} session${sessions.length === 1 ? 'e' : 'i'}`;
+
+        if (sessions.length === 0) {
+            container.innerHTML = `
+                <div style="font-size:11px;color:var(--text-dim);text-align:center;padding:16px 8px;">
+                    Nessuna sessione salvata sul telefono.<br>Registra con <b>REC Sessione</b> o carica il <b>Passo Demo</b>!
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        sessions.forEach((s) => {
+            html += `
+                <div class="session-card-item">
+                    <div class="session-header">
+                        <span class="session-date">📅 ${s.dateStr}</span>
+                        <span class="session-badge">📍 ${s.distanceKm} km</span>
+                    </div>
+                    <div class="session-stats-grid">
+                        <div class="s-stat"><span class="s-stat-lbl">Tempo</span><span class="s-stat-val" style="color:var(--text-main);">${Math.floor(s.durationSec/60)}m ${s.durationSec%60}s</span></div>
+                        <div class="s-stat"><span class="s-stat-lbl">Max SX</span><span class="s-stat-val" style="color:var(--yamaha-cyan);">-${s.maxRollL}°</span></div>
+                        <div class="s-stat"><span class="s-stat-lbl">Max DX</span><span class="s-stat-val" style="color:var(--accent-orange);">+${s.maxRollR}°</span></div>
+                        <div class="s-stat"><span class="s-stat-lbl">Max Vel</span><span class="s-stat-val" style="color:var(--accent-green);">${s.maxSpeedKmh} km/h</span></div>
+                    </div>
+                    <div class="session-actions">
+                        <button class="session-btn primary" onclick="loadSessionOnMap('${s.id}')">
+                            🗺️ Mappa
+                        </button>
+                        <button class="session-btn" onclick="exportSavedGpx('${s.id}')">
+                            📥 GPX
+                        </button>
+                        <button class="session-btn" onclick="exportSavedCsv('${s.id}')">
+                            📊 CSV
+                        </button>
+                        <button class="session-btn delete" onclick="deleteSavedSession('${s.id}')" title="Elimina">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+    function loadSessionOnMap(sessionId) {
+        let sessions = getSavedSessions();
+        let s = sessions.find(item => item.id === sessionId);
+        if (!s || !s.points || s.points.length === 0) {
+            alert("Nessun punto GPS trovato in questa sessione.");
+            return;
+        }
+
+        switchTab('tabMap', document.querySelectorAll('.tab-btn')[2]);
+
+        for (let seg of gpsTrackSegments) { if (map) map.removeLayer(seg); }
+        gpsTrackSegments = [];
+        for (let m of gpsApexMarkers) { if (map) map.removeLayer(m); }
+        gpsApexMarkers = [];
+
+        let bounds = [];
+        let curPeak = 0;
+        let curApex = null;
+
+        for (let i = 0; i < s.points.length - 1; i++) {
+            let p1 = s.points[i];
+            let p2 = s.points[i + 1];
+            if (!p1.lat || !p1.lon || !p2.lat || !p2.lon) continue;
+
+            let roll = parseFloat(p2.roll) || 0;
+            let absRoll = Math.abs(roll);
+            let speed = parseFloat(p2.speedKmh) || 0;
+            let alt = parseFloat(p2.alt) || 0;
+            let gLong = parseFloat(p2.gLong) || 0;
+
+            let color = getSegmentColor(roll, speed, gLong);
+
+            let seg = L.polyline([[p1.lat, p1.lon], [p2.lat, p2.lon]], {
+                color: color,
+                weight: 5,
+                opacity: 0.95,
+                lineJoin: 'round',
+                lineCap: 'round'
+            }).addTo(map);
+
+            seg.bindPopup(`
+                <div style="font-family:sans-serif;font-size:12px;color:#0a0e17;line-height:1.4;">
+                    <b style="font-size:13px;color:${color}">${absRoll >= 12 ? 'Curva ' + (roll < 0 ? 'SX' : 'DX') + ' ' + absRoll.toFixed(1) + '°' : 'Rettilineo'}</b><br>
+                    <span>⚡ Velocità: <b>${Math.round(speed)} km/h</b></span><br>
+                    <span>⛰️ Quota: <b>${Math.round(alt)} m</b></span>
+                </div>
+            `);
+            gpsTrackSegments.push(seg);
+            bounds.push([p1.lat, p1.lon]);
+
+            if (absRoll > 18.0) {
+                if (absRoll > curPeak) {
+                    curPeak = absRoll;
+                    curApex = { lat: p2.lat, lon: p2.lon, roll: roll };
+                }
+            } else if (curPeak >= 20.0 && curApex) {
+                addApexMarker(curApex.lat, curApex.lon, curApex.roll);
+                curPeak = 0;
+                curApex = null;
+            }
+        }
+
+        if (bounds.length > 0 && map) {
+            map.fitBounds(bounds, { padding: [25, 25] });
+        }
+
+        document.getElementById("lblGpsDist").innerText = `${s.distanceKm} km`;
+        document.getElementById("lblGpsSpeed").innerText = `${s.maxSpeedKmh} km/h (Max)`;
+        document.getElementById("lblMapLean").innerText = `-${s.maxRollL}° / +${s.maxRollR}°`;
+    }
+
+    function deleteSavedSession(sessionId) {
+        if (!confirm("Vuoi eliminare questa sessione salvata dal telefono?")) return;
+        let sessions = getSavedSessions().filter(s => s.id !== sessionId);
+        setSavedSessions(sessions);
+        renderSavedSessionsList();
+    }
+
+    function exportSavedGpx(sessionId) {
+        let s = getSavedSessions().find(item => item.id === sessionId);
+        if (!s) return;
+        let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+        gpx += `<gpx version="1.1" creator="Yamaha FZ8 Telemetry" xmlns="http://www.topografix.com/GPX/1/1">\n`;
+        gpx += `  <metadata><name>FZ8 Ride ${s.dateStr}</name><time>${new Date().toISOString()}</time></metadata>\n`;
+        gpx += `  <trk>\n    <name>FZ8 ${s.dateStr}</name>\n    <trkseg>\n`;
+        for (let r of s.points) {
+            if (r.lat && r.lon) {
+                gpx += `      <trkpt lat="${r.lat}" lon="${r.lon}">\n`;
+                gpx += `        <ele>${r.alt}</ele>\n`;
+                gpx += `        <extensions>\n`;
+                gpx += `          <speed>${(parseFloat(r.speedKmh)/3.6).toFixed(2)}</speed>\n`;
+                gpx += `          <roll>${r.roll}</roll>\n`;
+                gpx += `        </extensions>\n`;
+                gpx += `      </trkpt>\n`;
+            }
+        }
+        gpx += `    </trkseg>\n  </trk>\n</gpx>\n`;
+        downloadFile(gpx, `FZ8_${s.dateStr.replace(/[\/ :]/g, '_')}.gpx`, "application/gpx+xml;charset=utf-8;");
+    }
+
+    function exportSavedCsv(sessionId) {
+        let s = getSavedSessions().find(item => item.id === sessionId);
+        if (!s) return;
+        let csv = "Time_s,Latitude,Longitude,Speed_kmh,Roll_deg,Pitch_deg,G_Lat,G_Long,Altitude_m\n";
+        for (let r of s.points) {
+            csv += `${r.time},${r.lat},${r.lon},${r.speedKmh},${r.roll},${r.pitch},${r.gLat},${r.gLong},${r.alt}\n`;
+        }
+        downloadFile(csv, `FZ8_${s.dateStr.replace(/[\/ :]/g, '_')}.csv`, "text/csv;charset=utf-8;");
+    }
+
+    function loadDemoRoute() {
+        let centerLat = 44.0924;
+        let centerLon = 11.2785; // Passo della Futa
+        let pts = [];
+        let curLat = centerLat;
+        let curLon = centerLon;
+        let heading = 45;
+        let alt = 780;
+        let t = 0;
+
+        const curvePlan = [
+            { turns: 6, roll: 0, speed: 85 },
+            { turns: 8, roll: -36.5, speed: 52 },
+            { turns: 5, roll: 0, speed: 78 },
+            { turns: 9, roll: +41.2, speed: 48 },
+            { turns: 4, roll: 0, speed: 90 },
+            { turns: 10, roll: -44.8, speed: 44 },
+            { turns: 6, roll: +28.0, speed: 65 },
+            { turns: 5, roll: -30.0, speed: 62 },
+            { turns: 8, roll: +43.0, speed: 46 },
+            { turns: 10, roll: 0, speed: 82 }
+        ];
+
+        for (let sec of curvePlan) {
+            for (let i = 0; i < sec.turns; i++) {
+                heading += (sec.roll * 0.12);
+                let rad = heading * Math.PI / 180;
+                let stepM = 22;
+                curLat += (stepM * Math.cos(rad)) / 111111;
+                curLon += (stepM * Math.sin(rad)) / (111111 * Math.cos(curLat * Math.PI / 180));
+                alt += 3.5;
+                t += 1.2;
+
+                pts.push({
+                    time: t.toFixed(1),
+                    lat: curLat,
+                    lon: curLon,
+                    speedKmh: (sec.speed + (Math.random()*4 - 2)).toFixed(1),
+                    roll: (sec.roll + (Math.random()*2 - 1)).toFixed(1),
+                    pitch: (sec.roll !== 0 ? -1.8 : 2.4).toFixed(1),
+                    gLat: (Math.sin(sec.roll * Math.PI / 180)).toFixed(2),
+                    gLong: (sec.roll !== 0 ? -0.35 : 0.25).toFixed(2),
+                    alt: alt.toFixed(0)
+                });
+            }
+        }
+
+        let demoSession = {
+            id: "demo_" + Date.now(),
+            dateStr: "Passo della Futa (Demo Pieghe)",
+            durationSec: Math.round(t),
+            distanceKm: "5.40",
+            maxRollL: "44.8",
+            maxRollR: "43.0",
+            maxSpeedKmh: "94",
+            samplesCount: pts.length,
+            points: pts
+        };
+
+        saveCurrentSessionToPhone(demoSession);
+        loadSessionOnMap(demoSession.id);
     }
 
     // =========================================================================
@@ -1788,6 +2231,8 @@
         a.href = url;
         a.download = fileName;
         document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
         a.click();
         document.body.removeChild(a);
     }
