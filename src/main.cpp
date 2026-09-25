@@ -46,6 +46,8 @@ uint32_t lastBaroMillis = 0;
 uint32_t lastLogMillis = 0;
 uint32_t lastEspNowMillis = 0;
 uint32_t lastHeartbeatMillis = 0;
+bool verboseStream = false;
+uint32_t lastVerboseStreamMillis = 0;
 
 // Button state machine (GPIO 20)
 bool lastButtonState = HIGH;
@@ -186,7 +188,12 @@ void handleButton() {
 void handleSerial() {
     while (Serial.available()) {
         char c = Serial.read();
-        if (c == 's' || c == 'S') {
+        if (c == 'v' || c == 'V') {
+            verboseStream = !verboseStream;
+            Serial.printf("[SERIAL] Verbose Stream: %d\n", verboseStream);
+        } else if (c == 'i' || c == 'I') {
+            Serial.printf("[DEBUG] rawA:(%+.3f,%+.3f,%+.3f) rawG:(%+.2f,%+.2f,%+.2f) | AccRoll:%+.1f Roll:%+.1f EffRoll:%+.1f TareRoll:%+.1f | AccPitch:%+.1f Pitch:%+.1f | TotalG:%.2f State:%d\n", rawImu.ax, rawImu.ay, rawImu.az, rawImu.gx, rawImu.gy, rawImu.gz, motoFilter.getAccelRoll(), motoFilter.getRawRoll(), currentDynamics.rollDeg, motoFilter.getTareRoll(), motoFilter.getAccelPitch(), motoFilter.getRawPitch(), currentDynamics.totalG, (int)motoFilter.getState());
+        } else if (c == 's' || c == 'S') {
             Serial.printf("[STATUS] Roll: %+.1f deg, Pitch: %+.1f deg | GLat: %+.2f G, GLong: %+.2f G | Alt: %.1f m (D+: %.1f m), Temp: %.1f C | Head: %.0f deg (%s, %s) | MagRaw: (%+.2f, %+.2f, %+.2f) G | TPS: %.1f%% (ADC:%d) | Log: %s (%u smp, %u KB)\n",
                 currentDynamics.rollDeg, currentDynamics.pitchDeg,
                 currentDynamics.gLateral, currentDynamics.gLongitudinal,
@@ -385,6 +392,10 @@ void loop() {
     // ==========================================================================
     handleSerial();
     handleButton();
+    if (verboseStream && (currentMillis - lastVerboseStreamMillis >= 100)) {
+        lastVerboseStreamMillis = currentMillis;
+        Serial.printf("[DEBUG] rawA:(%+.3f,%+.3f,%+.3f) rawG:(%+.2f,%+.2f,%+.2f) | AccRoll:%+.1f Roll:%+.1f EffRoll:%+.1f TareRoll:%+.1f | AccPitch:%+.1f Pitch:%+.1f | TotalG:%.2f State:%d\n", rawImu.ax, rawImu.ay, rawImu.az, rawImu.gx, rawImu.gy, rawImu.gz, motoFilter.getAccelRoll(), motoFilter.getRawRoll(), currentDynamics.rollDeg, motoFilter.getTareRoll(), motoFilter.getAccelPitch(), motoFilter.getRawPitch(), currentDynamics.totalG, (int)motoFilter.getState());
+    }
 
     if (currentMillis - lastHeartbeatMillis >= 1000) {
         lastHeartbeatMillis = currentMillis;

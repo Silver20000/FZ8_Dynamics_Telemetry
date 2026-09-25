@@ -287,6 +287,8 @@ public:
         scX = _magScaleX; scY = _magScaleY; scZ = _magScaleZ;
     }
     float getRawPitch() const { return _pitch; }
+    float getAccelRoll() const { return _lastAccelRoll; }
+    float getAccelPitch() const { return _lastAccelPitch; }
     float getFilteredTotalG() const { return _filteredTotalG; }
     float getGyroBiasRoll() const { return _gyroBiasRollDps; }
     float getGyroBiasPitch() const { return _gyroBiasPitchDps; }
@@ -358,10 +360,10 @@ public:
         // 0. Axis Mapping & 90-degree Rotation
         float ax, ay, az, gx, gy, gz;
         if (_swapXY) {
-            ax = raw.ay;
-            ay = -raw.ax;
+            ax = -raw.ax;
+            ay = -raw.ay;
             az = raw.az;
-            gx = -raw.gy;
+            gx = raw.gy;
             gy = raw.gx;
             gz = raw.gz;
         } else {
@@ -428,7 +430,9 @@ public:
 
         // 3. Risoluzione Angolo Accelerometro puro
         float accelRoll = atan2f(ay, az) * (180.0f / (float)M_PI);
+        _lastAccelRoll = accelRoll;
         float accelPitch = atan2f(-ax, sqrtf(ay * ay + az * az)) * (180.0f / (float)M_PI);
+        _lastAccelPitch = accelPitch;
 
         // 4. Modulo rotazione angolare totale (|omega|)
         float totalOmega = sqrtf(gx * gx + gy * gy + gz * gz);
@@ -790,6 +794,8 @@ private:
     Preferences _prefs;
     float _roll;
     float _pitch;
+    float _lastAccelRoll = 0.0f;
+    float _lastAccelPitch = 0.0f;
     float _tareRoll;
     float _tarePitch;
     uint16_t _straightCycles;
