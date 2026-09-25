@@ -160,7 +160,8 @@ public:
             _tareRoll = 0.0f;
             _prefs.putFloat("tareRoll", 0.0f);
         }
-        if (fabsf(_tarePitch) > 30.0f) {
+        if (fabsf(_tarePitch) > 12.0f) {
+            Serial.printf("[FILTER] TarePitch (%.1f) anomalo rilevato! Resettato a 0.0\n", _tarePitch);
             _tarePitch = 0.0f;
             _prefs.putFloat("tarePitch", 0.0f);
         }
@@ -212,7 +213,10 @@ public:
     float getMaxLeanThreshold() const { return _maxLeanThreshold; }
 
     void tareZero() {
-        // Set current roll and pitch as mechanical mounting zero reference
+        if (fabsf(_roll) > 20.0f || fabsf(_pitch) > 15.0f) {
+            Serial.printf("[FILTER] Rifiutato Zero Tare: moto troppo inclinata (Roll=%.1f, Pitch=%.1f)!\n", _roll, _pitch);
+            return;
+        }
         _tareRoll = _roll;
         _tarePitch = _pitch;
         _prefs.begin("fz8_cal", false);

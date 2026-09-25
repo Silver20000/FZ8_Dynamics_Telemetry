@@ -275,6 +275,7 @@ public:
     void calibrateGyro(int samples = 150) {
         Serial.println("[IMU] Calibrating gyro bias (keep motorcycle still)...");
         float sumX = 0, sumY = 0, sumZ = 0;
+        float minX = 999, maxX = -999, minY = 999, maxY = -999, minZ = 999, maxZ = -999;
         int valid = 0;
 
         for (int i = 0; i < samples; i++) {
@@ -283,21 +284,40 @@ public:
                 int16_t rx = (int16_t)((gBuf[1] << 8) | gBuf[0]);
                 int16_t ry = (int16_t)((gBuf[3] << 8) | gBuf[2]);
                 int16_t rz = (int16_t)((gBuf[5] << 8) | gBuf[4]);
-                sumX += rx * 0.0175f;
-                sumY += ry * 0.0175f;
-                sumZ += rz * 0.0175f;
+                float gx = rx * 0.0175f;
+                float gy = ry * 0.0175f;
+                float gz = rz * 0.0175f;
+                sumX += gx; sumY += gy; sumZ += gz;
+                if (gx < minX) minX = gx; if (gx > maxX) maxX = gx;
+                if (gy < minY) minY = gy; if (gy > maxY) maxY = gy;
+                if (gz < minZ) minZ = gz; if (gz > maxZ) maxZ = gz;
                 valid++;
             }
             delay(8);
         }
 
-        if (valid > 0) {
-            _gyroBiasX = sumX / valid;
-            _gyroBiasY = sumY / valid;
-            _gyroBiasZ = sumZ / valid;
-            Serial.printf("[IMU] Gyro bias calculated: X=%.3f, Y=%.3f, Z=%.3f deg/s\n", 
-                          _gyroBiasX, _gyroBiasY, _gyroBiasZ);
+        float spanX = maxX - minX;
+        float spanY = maxY - minY;
+        float spanZ = maxZ - minZ;
+
+        // Se la moto si sta muovendo (span > 8.0 deg/s) o bias anomalo (> 4.0 deg/s), rifiuta la calibrazione!
+        if (valid > 50 && spanX < 8.0f && spanY < 8.0f && spanZ < 8.0f) {
+            float bX = sumX / valid;
+            float bY = sumY / valid;
+            float bZ = sumZ / valid;
+            if (fabsf(bX) < 4.0f && fabsf(bY) < 4.0f && fabsf(bZ) < 4.0f) {
+                _gyroBiasX = bX;
+                _gyroBiasY = bY;
+                _gyroBiasZ = bZ;
+                Serial.printf("[IMU] Gyro bias calculated: X=%.3f, Y=%.3f, Z=%.3f deg/s\n", 
+                              _gyroBiasX, _gyroBiasY, _gyroBiasZ);
+                return;
+            }
         }
+        Serial.println("[IMU] Movimento rilevato all'avvio! Bias impostato a 0.0 (il filtro adattera da fermo).");
+        _gyroBiasX = 0.0f;
+        _gyroBiasY = 0.0f;
+        _gyroBiasZ = 0.0f;
     }
 
     void setTareOffsets(float rollBiasDeg) {

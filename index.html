@@ -1270,10 +1270,41 @@
         }
     }
 
+    let reconnectTimeout = null;
+
     function onDisconnected() {
         isConnected = false;
         document.getElementById("btnConnect").classList.remove("connected");
-        document.getElementById("btnConnectText").innerText = "BLE";
+        document.getElementById("btnConnectText").innerText = "RIC...";
+        
+        // Riconnessione automatica immediata appena la scheda viene riaccesa!
+        if (bleDevice && !reconnectTimeout) {
+            reconnectTimeout = setTimeout(attemptAutoReconnect, 1500);
+        }
+    }
+
+    async function attemptAutoReconnect() {
+        reconnectTimeout = null;
+        if (!bleDevice || isConnected) return;
+        try {
+            document.getElementById("btnConnectText").innerText = "RIC...";
+            bleServer = await bleDevice.gatt.connect();
+            const service = await bleServer.getPrimaryService(SERVICE_UUID);
+            bleChar = await service.getCharacteristic(CHAR_DATA_UUID);
+            try {
+                bleCmdChar = await service.getCharacteristic(CHAR_CMD_UUID);
+            } catch(e) {}
+            await bleChar.startNotifications();
+            bleChar.addEventListener('characteristicvaluechanged', handleBleData);
+            isConnected = true;
+            document.getElementById("btnConnect").classList.add("connected");
+            document.getElementById("btnConnectText").innerText = "CONNESSO";
+            console.log("[BLE] Riconnesso automaticamente!");
+        } catch (err) {
+            console.log("[BLE] Attesa riaccensione scheda...", err);
+            document.getElementById("btnConnectText").innerText = "ATTESA...";
+            reconnectTimeout = setTimeout(attemptAutoReconnect, 2000);
+        }
     }
 
     // Send Remote Command over BLE to ESP32
