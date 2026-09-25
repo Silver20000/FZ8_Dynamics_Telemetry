@@ -1,4 +1,4 @@
-﻿#ifndef BLUETOOTH_TELEMETRY_H
+#ifndef BLUETOOTH_TELEMETRY_H
 #define BLUETOOTH_TELEMETRY_H
 
 #include <Arduino.h>
@@ -124,10 +124,10 @@ public:
         _lastUpdateMillis = now;
 
         // RaceChrono DIY NMEA Format v2 (20Hz):
-        // $RC2,[time_ms],[count],[g_lat],[g_long],[roll_deg],[pitch_deg],[roll_rate],[yaw_rate],[altitude],[tps_pct],[autocal_pct],[autocal_samples]*[checksum]\r\n
-        char sentence[160];
+        // $RC2,[time_ms],[count],[g_lat],[g_long],[roll_deg],[pitch_deg],[roll_rate],[yaw_rate],[altitude],[tps_pct],[autocal_pct],[autocal_samples],[heading],[cardinal],[head_valid],[d_plus],[temp]*[checksum]\r\n
+        char sentence[200];
         int len = snprintf(sentence, sizeof(sentence),
-            "$RC2,%lu,%lu,%.2f,%.2f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%u,%lu",
+            "$RC2,%lu,%lu,%.2f,%.2f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%u,%lu,%.1f,%s,%d,%.1f,%.1f",
             (unsigned long)now,
             (unsigned long)_packetCounter++,
             dyn.gLateral,
@@ -139,7 +139,12 @@ public:
             dyn.altitudeM,
             dyn.tpsPercent,
             autoCal.getProgressPercent(),
-            (unsigned long)autoCal.getStraightSamples()
+            (unsigned long)autoCal.getStraightSamples(),
+            dyn.headingDeg,
+            dyn.cardinal[0] ? dyn.cardinal : "-",
+            dyn.isHeadingValid ? 1 : 0,
+            dyn.totalElevationGainM,
+            dyn.tempC
         );
 
         // Calcola Checksum XOR standard NMEA
@@ -148,7 +153,7 @@ public:
             checksum ^= (uint8_t)sentence[i];
         }
 
-        char fullPacket[170];
+        char fullPacket[210];
         int totalLen = snprintf(fullPacket, sizeof(fullPacket), "%s*%02X\r\n", sentence, checksum);
 
         _pCharacteristic->setValue((uint8_t*)fullPacket, totalLen);

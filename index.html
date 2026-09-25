@@ -83,29 +83,233 @@
         /* Navigation Tabs */
         .tab-bar {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr 1fr;
+            grid-template-columns: repeat(5, 1fr);
             background: var(--bg-card-glass);
             border: 1px solid var(--border-card);
             border-radius: 12px;
             padding: 4px;
-            gap: 4px;
+            gap: 3px;
         }
         .tab-btn {
             background: transparent;
             border: none;
             color: var(--text-dim);
             font-weight: 700;
-            font-size: 11px;
-            padding: 8px 2px;
+            font-size: 10px;
+            padding: 7px 1px;
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.2s ease;
             text-align: center;
+            white-space: nowrap;
         }
         .tab-btn.active {
             background: rgba(0, 102, 255, 0.25);
             color: var(--yamaha-cyan);
             border: 1px solid rgba(0, 212, 255, 0.3);
+        }
+
+        /* Compass Page Styles */
+        .compass-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        .compass-rose-container {
+            width: 250px;
+            height: 250px;
+            position: relative;
+            margin: 8px 0 12px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .compass-dial-svg {
+            width: 100%;
+            height: 100%;
+            transition: transform 0.12s cubic-bezier(0.1, 0.9, 0.2, 1);
+            transform-origin: 50% 50%;
+        }
+        .compass-center-display {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            background: rgba(11, 16, 26, 0.92);
+            border: 2px solid rgba(0, 212, 255, 0.4);
+            box-shadow: 0 0 24px rgba(0, 102, 255, 0.25), inset 0 0 15px rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 5;
+            pointer-events: none;
+        }
+        .compass-deg-val {
+            font-size: 28px;
+            font-weight: 900;
+            color: #ffffff;
+            line-height: 1;
+            letter-spacing: -0.5px;
+            font-variant-numeric: tabular-nums;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+        .compass-cardinal-val {
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--yamaha-cyan);
+            margin-top: 3px;
+            letter-spacing: 1.5px;
+        }
+        .compass-status-pill {
+            margin-top: 4px;
+            font-size: 8px;
+            font-weight: 800;
+            padding: 2px 7px;
+            border-radius: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: rgba(0, 230, 118, 0.15);
+            color: var(--accent-green);
+            border: 1px solid rgba(0, 230, 118, 0.4);
+        }
+        .compass-status-pill.gate {
+            background: rgba(255, 171, 0, 0.15);
+            color: var(--accent-orange);
+            border-color: rgba(255, 171, 0, 0.4);
+        }
+        .compass-bezel-pointer {
+            position: absolute;
+            top: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 14px solid var(--accent-orange);
+            filter: drop-shadow(0 0 5px var(--accent-orange));
+            z-index: 6;
+        }
+
+        /* Heading Tape / Ribbon */
+        .heading-tape-wrap {
+            width: 100%;
+            background: rgba(11, 16, 26, 0.7);
+            border: 1px solid var(--border-card);
+            border-radius: 10px;
+            padding: 8px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            position: relative;
+        }
+        .tape-track-container {
+            width: 100%;
+            height: 40px;
+            position: relative;
+            overflow: hidden;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .tape-track {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            position: absolute;
+            left: 50%;
+            will-change: transform;
+            transition: transform 0.12s linear;
+        }
+        .tape-mark {
+            width: 36px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--text-dim);
+            flex-shrink: 0;
+        }
+        .tape-mark.cardinal {
+            color: var(--yamaha-cyan);
+            font-weight: 900;
+            font-size: 11px;
+        }
+        .tape-mark.north {
+            color: var(--accent-red);
+            font-weight: 900;
+            font-size: 11px;
+        }
+        .tape-tick {
+            width: 1px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.25);
+            margin-bottom: 2px;
+        }
+        .tape-reticle {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--accent-orange);
+            box-shadow: 0 0 8px var(--accent-orange);
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+        .tape-reticle::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 6px solid var(--accent-orange);
+        }
+
+        /* 4-Box Mountain Grid */
+        .mountain-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            width: 100%;
+        }
+        .m-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .m-box-title {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .m-box-val {
+            font-size: 20px;
+            font-weight: 900;
+            color: var(--text-main);
+            margin: 4px 0 2px 0;
+            font-variant-numeric: tabular-nums;
+        }
+        .m-box-sub {
+            font-size: 9px;
+            color: var(--text-dim);
         }
 
         .tab-content { display: none; flex-direction: column; gap: 10px; width: 100%; }
@@ -371,9 +575,10 @@
         </div>
     </header>
 
-    <!-- Navigation Tabs (4 TABS) -->
+    <!-- Navigation Tabs (5 TABS) -->
     <div class="tab-bar">
         <button class="tab-btn active" onclick="switchTab('tabLive', this)">📊 Live</button>
+        <button class="tab-btn" onclick="switchTab('tabCompass', this)">🧭 Bussola</button>
         <button class="tab-btn" onclick="switchTab('tabMap', this)">🗺️ Mappa</button>
         <button class="tab-btn" onclick="switchTab('tabScreens', this)">📺 Schermi</button>
         <button class="tab-btn" onclick="switchTab('tabSettings', this)">⚙️ Setup</button>
@@ -502,7 +707,138 @@
         </div>
     </div>
 
-    <!-- TAB 2: MAPPA & TRACCIATO GPS -->
+    <!-- TAB 2: BUSSOLA & MOUNTAIN TOUR -->
+    <div id="tabCompass" class="tab-content">
+        <!-- Main Compass Dial Card -->
+        <div class="card compass-card">
+            <div class="lean-header" style="width:100%;">
+                <span>Bussola Digitale 10-DOF (LSM303D)</span>
+                <span id="lblCompassGating" style="color:var(--accent-green);font-size:11px;font-weight:700;">Tilt Compensated</span>
+            </div>
+
+            <!-- Rotating Compass Rose Dial -->
+            <div class="compass-rose-container">
+                <div class="compass-bezel-pointer"></div>
+                <div class="compass-center-display">
+                    <span class="compass-deg-val" id="lblCompassDeg">0°</span>
+                    <span class="compass-cardinal-val" id="lblCompassCard">N</span>
+                    <span class="compass-status-pill" id="lblCompassStatus">VALIDA</span>
+                </div>
+                <svg id="compassDial" class="compass-dial-svg" viewBox="0 0 250 250">
+                    <defs>
+                        <radialGradient id="compassBgGrad" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#162032" stop-opacity="0.8"/>
+                            <stop offset="85%" stop-color="#0b101a" stop-opacity="0.95"/>
+                            <stop offset="100%" stop-color="#001428" stop-opacity="1"/>
+                        </radialGradient>
+                    </defs>
+                    <!-- Outer Ring -->
+                    <circle cx="125" cy="125" r="118" fill="url(#compassBgGrad)" stroke="rgba(0, 212, 255, 0.25)" stroke-width="2"/>
+                    <circle cx="125" cy="125" r="102" fill="none" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1"/>
+                    
+                    <!-- Major 30-deg Ticks & Degree Numbers -->
+                    <line x1="125" y1="8" x2="125" y2="22" stroke="#ff1744" stroke-width="3"/>
+                    <text x="125" y="38" text-anchor="middle" fill="#ff1744" font-size="16" font-weight="900" font-family="sans-serif">N</text>
+                    
+                    <line x1="242" y1="125" x2="228" y2="125" stroke="#00d4ff" stroke-width="3"/>
+                    <text x="216" y="130" text-anchor="middle" fill="#00d4ff" font-size="15" font-weight="900" font-family="sans-serif">E</text>
+
+                    <line x1="125" y1="242" x2="125" y2="228" stroke="#00d4ff" stroke-width="3"/>
+                    <text x="125" y="222" text-anchor="middle" fill="#00d4ff" font-size="15" font-weight="900" font-family="sans-serif">S</text>
+
+                    <line x1="8" y1="125" x2="22" y2="125" stroke="#00d4ff" stroke-width="3"/>
+                    <text x="34" y="130" text-anchor="middle" fill="#00d4ff" font-size="15" font-weight="900" font-family="sans-serif">W</text>
+
+                    <!-- Intermediate Cardinals: NE (45), SE (135), SW (225), NW (315) -->
+                    <text x="186" y="68" text-anchor="middle" fill="#8899ac" font-size="11" font-weight="700">NE</text>
+                    <text x="186" y="190" text-anchor="middle" fill="#8899ac" font-size="11" font-weight="700">SE</text>
+                    <text x="64" y="190" text-anchor="middle" fill="#8899ac" font-size="11" font-weight="700">SW</text>
+                    <text x="64" y="68" text-anchor="middle" fill="#8899ac" font-size="11" font-weight="700">NW</text>
+
+                    <!-- Degree Ticks -->
+                    <g stroke="rgba(255,255,255,0.3)" stroke-width="1.5">
+                        <line x1="125" y1="10" x2="125" y2="17" transform="rotate(15 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="20" transform="rotate(30 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="17" transform="rotate(45 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="20" transform="rotate(60 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="17" transform="rotate(75 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="17" transform="rotate(105 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="20" transform="rotate(120 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="17" transform="rotate(135 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="20" transform="rotate(150 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="17" transform="rotate(165 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="17" transform="rotate(195 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="20" transform="rotate(210 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="17" transform="rotate(225 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="20" transform="rotate(240 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="17" transform="rotate(255 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="17" transform="rotate(285 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="20" transform="rotate(300 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="17" transform="rotate(315 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="20" transform="rotate(330 125 125)"/>
+                        <line x1="125" y1="10" x2="125" y2="17" transform="rotate(345 125 125)"/>
+                    </g>
+                </svg>
+            </div>
+
+            <!-- Heading Tape Ribbon (Aviation HUD) -->
+            <div class="heading-tape-wrap">
+                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);font-weight:700;">
+                    <span>NASTRO ROTTA AZIMUTH</span>
+                    <span id="lblGpsTrackHeading" style="color:var(--yamaha-cyan);">GPS Rotta: --°</span>
+                </div>
+                <div class="tape-track-container">
+                    <div class="tape-reticle"></div>
+                    <div id="headingTapeTrack" class="tape-track"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mountain Tour & Altimetry 4-Box Grid -->
+        <div class="mountain-grid">
+            <div class="m-box">
+                <div class="m-box-title">
+                    <span>⛰️ Quota s.l.m.</span>
+                </div>
+                <div class="m-box-val" id="lblTourAlt" style="color:var(--yamaha-cyan);">-- m</div>
+                <div class="m-box-sub">Barometro BMP180</div>
+            </div>
+
+            <div class="m-box">
+                <div class="m-box-title">
+                    <span>📈 Dislivello D+</span>
+                </div>
+                <div class="m-box-val" id="lblTourDPlus" style="color:var(--accent-green);">+0 m</div>
+                <div class="m-box-sub">Deadband 2m anti-turbolenza</div>
+            </div>
+
+            <div class="m-box">
+                <div class="m-box-title">
+                    <span>🌡️ Temp Sensore</span>
+                </div>
+                <div class="m-box-val" id="lblTourTemp" style="color:var(--accent-orange);">-- °C</div>
+                <div class="m-box-sub">Sonda termica interna</div>
+            </div>
+
+            <div class="m-box">
+                <div class="m-box-title">
+                    <span>📐 Assetto / Pendenza</span>
+                </div>
+                <div class="m-box-val" id="lblTourPitch" style="color:#ffffff;">0.0°</div>
+                <div class="m-box-sub">Beccheggio Forcella/Mono</div>
+            </div>
+        </div>
+
+        <!-- Navigation Tips & Calibration Notice -->
+        <div class="card" style="padding:12px;font-size:11px;color:var(--text-dim);line-height:1.5;">
+            <div style="font-weight:800;color:var(--text-main);margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+                <span>ℹ️ Note sulla Navigazione FZ8</span>
+            </div>
+            La bussola è compensata dinamicamente con il rollio e il beccheggio dell'IMU 10-DOF. In piega coordinata profonda, il gating cinematico preserva l'azimuth per evitare derive causate dal campo magnetico terrestre inclinato.
+        </div>
+    </div>
+
+    <!-- TAB 3: MAPPA & TRACCIATO GPS -->
     <div id="tabMap" class="tab-content">
         <div class="card" style="padding:10px;">
             <div class="lean-header" style="margin-bottom:8px;">
@@ -761,6 +1097,7 @@
     let state = {
         roll: 0, pitch: 0, gLat: 0, gLong: 0, rollRate: 0, yawRate: 0, altitude: 0, tps: 0,
         autocalPct: 0, autocalSamples: 0,
+        heading: 0, cardinal: 'N', headingValid: false, dPlus: 0, tempC: 0,
         maxRollL: 0, maxRollR: 0, maxBrake: 0, maxAccel: 0, warningThreshold: 48.0
     };
 
@@ -940,6 +1277,12 @@
             let autocalPct = (parts.length >= 12) ? (parseInt(parts[11]) || 0) : 0;
             let autocalSamples = (parts.length >= 13) ? (parseInt(parts[12]) || 0) : 0;
 
+            let heading = (parts.length >= 14) ? (parseFloat(parts[13]) || 0) : 0;
+            let cardinal = (parts.length >= 15) ? parts[14].trim() : '-';
+            let headingValid = (parts.length >= 16) ? (parseInt(parts[15]) === 1) : false;
+            let dPlus = (parts.length >= 17) ? (parseFloat(parts[16]) || 0) : 0;
+            let tempC = (parts.length >= 18) ? (parseFloat(parts[17]) || 0) : 0;
+
             let gLat = rawGLat;
             let gLong = rawGLong;
 
@@ -954,11 +1297,11 @@
                 gLat = rawGLong;
             }
 
-            updateTelemetry(roll, pitch, gLat, gLong, rollRate, yawRate, alt, tps, autocalPct, autocalSamples);
+            updateTelemetry(roll, pitch, gLat, gLong, rollRate, yawRate, alt, tps, autocalPct, autocalSamples, heading, cardinal, headingValid, dPlus, tempC);
         }
     }
 
-    function updateTelemetry(roll, pitch, gLat, gLong, rollRate, yawRate, alt, tps, autocalPct, autocalSamples) {
+    function updateTelemetry(roll, pitch, gLat, gLong, rollRate, yawRate, alt, tps, autocalPct, autocalSamples, heading = 0, cardinal = '-', headingValid = false, dPlus = 0, tempC = 0) {
         state.roll = roll;
         state.pitch = pitch;
         state.gLat = gLat;
@@ -969,6 +1312,11 @@
         state.tps = tps;
         state.autocalPct = autocalPct;
         state.autocalSamples = autocalSamples;
+        state.heading = heading;
+        state.cardinal = cardinal;
+        state.headingValid = headingValid;
+        state.dPlus = dPlus;
+        state.tempC = tempC;
 
         if (roll < 0 && Math.abs(roll) > state.maxRollL) state.maxRollL = Math.abs(roll);
         if (roll > 0 && roll > state.maxRollR) state.maxRollR = roll;
@@ -988,7 +1336,8 @@
                 gLong: gLong.toFixed(3),
                 rollRate: rollRate.toFixed(1),
                 yawRate: yawRate.toFixed(1),
-                alt: alt.toFixed(1)
+                alt: alt.toFixed(1),
+                heading: heading.toFixed(1)
             });
         }
 
@@ -1120,6 +1469,57 @@
 
         gTrail.push({ x: state.gLat, y: state.gLong });
         if (gTrail.length > 25) gTrail.shift();
+
+        // 🧭 Compass & Navigation Render
+        let dial = document.getElementById("compassDial");
+        if (dial) {
+            dial.style.transform = `rotate(${-state.heading}deg)`;
+        }
+        let compDegEl = document.getElementById("lblCompassDeg");
+        if (compDegEl) compDegEl.innerText = Math.round(state.heading) + "°";
+        let compCardEl = document.getElementById("lblCompassCard");
+        if (compCardEl) compCardEl.innerText = state.cardinal;
+        
+        let compStatusEl = document.getElementById("lblCompassStatus");
+        let compGatingEl = document.getElementById("lblCompassGating");
+        if (compStatusEl) {
+            if (state.headingValid) {
+                compStatusEl.innerText = "VALIDA";
+                compStatusEl.className = "compass-status-pill";
+                if (compGatingEl) {
+                    compGatingEl.innerText = "Tilt Compensated";
+                    compGatingEl.style.color = "var(--accent-green)";
+                }
+            } else {
+                compStatusEl.innerText = "TILT GATE";
+                compStatusEl.className = "compass-status-pill gate";
+                if (compGatingEl) {
+                    compGatingEl.innerText = "Gating Curva Attivo";
+                    compGatingEl.style.color = "var(--accent-orange)";
+                }
+            }
+        }
+
+        // Heading Tape Update (36px per 10 deg -> 3.6px per deg)
+        let tape = document.getElementById("headingTapeTrack");
+        if (tape) {
+            let offsetPx = -(state.heading * 3.6);
+            tape.style.transform = `translateX(${offsetPx}px)`;
+        }
+        let gpsHeadEl = document.getElementById("lblGpsTrackHeading");
+        if (gpsHeadEl) {
+            gpsHeadEl.innerText = currentGpsState.heading > 0 ? `GPS Rotta: ${currentGpsState.heading.toFixed(0)}°` : "GPS Rotta: --°";
+        }
+
+        // Mountain Tour 4-Box Grid
+        let tourAltEl = document.getElementById("lblTourAlt");
+        if (tourAltEl) tourAltEl.innerText = Math.round(state.altitude) + " m";
+        let tourDPlusEl = document.getElementById("lblTourDPlus");
+        if (tourDPlusEl) tourDPlusEl.innerText = "+" + Math.round(state.dPlus) + " m";
+        let tourTempEl = document.getElementById("lblTourTemp");
+        if (tourTempEl) tourTempEl.innerText = state.tempC.toFixed(1) + " °C";
+        let tourPitchEl = document.getElementById("lblTourPitch");
+        if (tourPitchEl) tourPitchEl.innerText = (state.pitch >= 0 ? "+" : "") + state.pitch.toFixed(1) + "°";
     }
 
     function resetMaxStats() {
@@ -1467,6 +1867,22 @@
         requestAnimationFrame(drawGraph);
     }
     requestAnimationFrame(drawGraph);
+
+    function initHeadingTape() {
+        const tape = document.getElementById("headingTapeTrack");
+        if (!tape) return;
+        let html = '';
+        const cardinals = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW', 360: 'N', 405: 'NE', 450: 'E', 495: 'SE', 540: 'S', 585: 'SW', 630: 'W', 675: 'NW', 720: 'N' };
+        for (let deg = 0; deg <= 720; deg += 10) {
+            let card = cardinals[deg] || '';
+            let isN = (deg % 360 === 0);
+            let cls = isN ? 'tape-mark north' : (card ? 'tape-mark cardinal' : 'tape-mark');
+            let label = card || (deg % 360);
+            html += `<div class="${cls}"><div class="tape-tick"></div><span>${label}</span></div>`;
+        }
+        tape.innerHTML = html;
+    }
+    initHeadingTape();
 </script>
 </body>
 </html>
