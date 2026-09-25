@@ -37,7 +37,7 @@
 // IMU SENSOR AXIS ORIENTATION
 // ==============================================================================
 #define IMU_SWAP_XY             true    // true = Roll e Pitch orientati correttamente con USB-C verso anteriore
-#define IMU_INVERT_ROLL         true    // true = Inverte il verso della piega (inclinando a SX mostra SX)
+#define IMU_INVERT_ROLL         false    // true = Inverte il verso della piega (inclinando a SX mostra SX)
 #define IMU_INVERT_ACCEL        false   // Inverte il verso dell'accelerazione (ACC/BRK) se necessario
 
 // Allineamento Rotazionale Orizzontale (Yaw / Skew Correction)

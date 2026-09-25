@@ -143,7 +143,8 @@ public:
         _tarePitch = _prefs.getFloat("tarePitch", MANUAL_PITCH_OFFSET_DEG);
         _yawAlignDeg = _prefs.getFloat("yawAlign", IMU_YAW_ALIGN_DEG);
         _swapXY = _prefs.getBool("swapXY", IMU_SWAP_XY);
-        _invertRoll = _prefs.getBool("invRoll", IMU_INVERT_ROLL);
+        _prefs.remove("invRoll");
+        _invertRoll = IMU_INVERT_ROLL;
         _invertAccel = _prefs.getBool("invAcc", IMU_INVERT_ACCEL);
         _maxLeanThreshold = _prefs.getFloat("maxLeanWarn", DEFAULT_MAX_LEAN_WARN_DEG);
         _magOffsetX = _prefs.getFloat("magOffX", 0.0f);
@@ -360,11 +361,11 @@ public:
         // 0. Axis Mapping & 90-degree Rotation
         float ax, ay, az, gx, gy, gz;
         if (_swapXY) {
-            ax = -raw.ax;
+            ax = raw.ax;
             ay = -raw.ay;
             az = raw.az;
             gx = raw.gy;
-            gy = raw.gx;
+            gy = -raw.gx;
             gz = raw.gz;
         } else {
             ax = raw.ax;
@@ -435,14 +436,14 @@ public:
         _lastAccelPitch = accelPitch;
 
         // 4. Modulo rotazione angolare totale (|omega|)
-        float totalOmega = sqrtf(gx * gx + gy * gy + gz * gz);
+        float totalOmega = sqrtf(gxCorrected * gxCorrected + gyCorrected * gyCorrected + gz * gz);
 
         // =====================================================================
         // 5. RICONOSCIMENTO STATO (Gating a 3 Stati Anti-Trappola Curva Coordinata)
         // =====================================================================
         // Quando la moto o schedina è ferma (totalOmega < 2.5 deg/s e gravità pura ~1g),
         // NON c'è accelerazione centripeta o di marcia: siamo SEMPRE in STATIONARY!
-        bool isStationary = (totalOmega < 2.5f && fabsf(_filteredTotalG - 1.0f) < 0.10f);
+        bool isStationary = (totalOmega < 4.0f && fabsf(_filteredTotalG - 1.0f) < 0.12f);
 
         bool lowRotation = (totalOmega < GATE_GYRO_MAX_DPS);
         bool validGNorm  = (_filteredTotalG >= GATE_TOTAL_G_MIN && _filteredTotalG <= GATE_TOTAL_G_MAX);
