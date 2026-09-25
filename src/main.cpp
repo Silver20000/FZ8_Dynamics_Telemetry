@@ -187,15 +187,22 @@ void handleSerial() {
     while (Serial.available()) {
         char c = Serial.read();
         if (c == 's' || c == 'S') {
-            Serial.printf("[STATUS] Roll: %+.1f deg, Pitch: %+.1f deg | GLat: %+.2f G, GLong: %+.2f G | Alt: %.1f m (D+: %.1f m), Temp: %.1f C | Head: %.0f deg (%s, %s) | TPS: %.1f%% (ADC:%d) | Log: %s (%u smp, %u KB)\n",
+            Serial.printf("[STATUS] Roll: %+.1f deg, Pitch: %+.1f deg | GLat: %+.2f G, GLong: %+.2f G | Alt: %.1f m (D+: %.1f m), Temp: %.1f C | Head: %.0f deg (%s, %s) | MagRaw: (%+.2f, %+.2f, %+.2f) G | TPS: %.1f%% (ADC:%d) | Log: %s (%u smp, %u KB)\n",
                 currentDynamics.rollDeg, currentDynamics.pitchDeg,
                 currentDynamics.gLateral, currentDynamics.gLongitudinal,
                 currentDynamics.altitudeM, currentDynamics.totalElevationGainM, currentDynamics.tempC,
                 currentDynamics.headingDeg, currentDynamics.cardinal,
                 currentDynamics.isHeadingValid ? "VALID" : "TILT_GATE",
+                rawImu.mx, rawImu.my, rawImu.mz,
                 currentDynamics.tpsPercent, (int)filteredTpsAdc,
                 sessionLogger.isLogging() ? "REC" : "IDLE",
                 sessionLogger.getSampleCount(), (unsigned)(sessionLogger.getFileSize() / 1024));
+        } else if (c == 'm' || c == 'M') {
+            if (motoFilter.isMagCalibrating()) {
+                motoFilter.finishMagCal();
+            } else {
+                motoFilter.startMagCal();
+            }
         } else if (c == 'd' || c == 'D') {
             sessionLogger.dumpCsvToSerial(Serial);
         } else if (c == 'a' || c == 'A') {
@@ -310,6 +317,10 @@ void setup() {
         } else if (cmd == "REC_STOP") {
             sessionLogger.stopSession();
             Serial.println("[BLE EXEC] Datalogger fermato!");
+        } else if (cmd == "CAL_MAG_START") {
+            motoFilter.startMagCal();
+        } else if (cmd == "CAL_MAG_STOP") {
+            motoFilter.finishMagCal();
         }
     });
 
@@ -377,6 +388,9 @@ void loop() {
 
     if (currentMillis - lastHeartbeatMillis >= 1000) {
         lastHeartbeatMillis = currentMillis;
+        if (motoFilter.isMagCalibrating()) {
+            Serial.printf("[MAG CAL] In corso... %u s rimanenti (ruota la schedina)\n", motoFilter.getMagCalRemainingSec());
+        }
         if (autoCal.isRunning()) {
             // Fast double blink when Auto-Calibration is running
             digitalWrite(STATUS_LED_PIN, LOW); delayMicroseconds(40000);

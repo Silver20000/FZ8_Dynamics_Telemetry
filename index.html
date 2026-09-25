@@ -829,6 +829,20 @@
             </div>
         </div>
 
+        <!-- Compass Calibration Action Card -->
+        <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:8px;">
+            <div class="lean-header" style="width:100%; margin-bottom:0;">
+                <span>🎯 Calibrazione Magnetica Hard-Iron</span>
+                <span id="lblMagCalTimer" style="color:var(--yamaha-cyan); font-weight:700; font-size:11px;">Pronta</span>
+            </div>
+            <div style="font-size:11px; color:var(--text-dim); line-height:1.4;">
+                Se la bussola non ruota liberamente a 360°, avvia la calibrazione e ruota la schedina lentamente in tutte le direzioni (a cerchio o a forma di 8) per azzerare l'offset dei componenti metallici.
+            </div>
+            <button class="toggle-btn" id="btnMagCal" style="width:100%; padding:10px; font-weight:800;" onclick="toggleMagCal()">
+                AVVIA CALIBRAZIONE BUSSOLA (15s)
+            </button>
+        </div>
+
         <!-- Navigation Tips & Calibration Notice -->
         <div class="card" style="padding:12px;font-size:11px;color:var(--text-dim);line-height:1.5;">
             <div style="font-weight:800;color:var(--text-main);margin-bottom:4px;display:flex;align-items:center;gap:6px;">
@@ -1883,6 +1897,44 @@
         tape.innerHTML = html;
     }
     initHeadingTape();
+
+    let magCalInterval = null;
+    let magCalSec = 0;
+    function toggleMagCal() {
+        const btn = document.getElementById("btnMagCal");
+        const lbl = document.getElementById("lblMagCalTimer");
+        if (magCalInterval) {
+            clearInterval(magCalInterval);
+            magCalInterval = null;
+            sendBleCmd("CAL_MAG_STOP");
+            btn.innerText = "AVVIA CALIBRAZIONE BUSSOLA (15s)";
+            btn.classList.remove("on");
+            lbl.innerText = "Calibrazione Salvata!";
+            lbl.style.color = "var(--accent-green)";
+            return;
+        }
+        sendBleCmd("CAL_MAG_START");
+        magCalSec = 15;
+        btn.innerText = `SALVA SUBITO (${magCalSec}s)`;
+        btn.classList.add("on");
+        lbl.innerText = `Ruota la schedina a 360°... ${magCalSec}s`;
+        lbl.style.color = "var(--accent-orange)";
+        
+        magCalInterval = setInterval(() => {
+            magCalSec--;
+            if (magCalSec <= 0) {
+                clearInterval(magCalInterval);
+                magCalInterval = null;
+                btn.innerText = "AVVIA CALIBRAZIONE BUSSOLA (15s)";
+                btn.classList.remove("on");
+                lbl.innerText = "Calibrazione Completata!";
+                lbl.style.color = "var(--accent-green)";
+            } else {
+                btn.innerText = `SALVA SUBITO (${magCalSec}s)`;
+                lbl.innerText = `Ruota la schedina a 360°... ${magCalSec}s`;
+            }
+        }, 1000);
+    }
 </script>
 </body>
 </html>

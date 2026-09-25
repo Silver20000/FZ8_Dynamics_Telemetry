@@ -185,9 +185,9 @@ public:
         float cr = cosf(rollRad);
         float sr = sinf(rollRad);
 
-        // De-rotate magnetometer vector to horizontal plane
-        float xh = mx * cp + mz * sp;
-        float yh = mx * sr * sp + my * cr - mz * sr * cp;
+        // De-rotate magnetometer vector to horizontal plane (Z-up coordinate frame)
+        float xh = mx * cp - mz * sp;
+        float yh = mx * sr * sp + my * cr + mz * sr * cp;
 
         float heading = atan2f(-yh, xh) * (180.0f / (float)M_PI);
         heading += MAG_DECLINATION_DEG; // Compensate for local magnetic declination
@@ -313,6 +313,14 @@ private:
         writeI2CByte(_lsmAddr, LSM303D_CTRL1, 0x67);
         // CTRL2: Anti-alias 773Hz, +/-4G range (0x08)
         writeI2CByte(_lsmAddr, LSM303D_CTRL2, 0x08);
+
+        // Magnetometer Configuration:
+        // CTRL5: High resolution mode (M_RES=11), 50Hz ODR (M_ODR=100) -> 0x70
+        writeI2CByte(_lsmAddr, LSM303D_CTRL5, 0x70);
+        // CTRL6: +/- 4 Gauss full scale (0x20)
+        writeI2CByte(_lsmAddr, LSM303D_CTRL6, 0x20);
+        // CTRL7: Continuous-conversion mode (MD=00) - default 0x02 is power-down!
+        writeI2CByte(_lsmAddr, LSM303D_CTRL7, 0x00);
         return true;
     }
 

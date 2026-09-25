@@ -126,7 +126,14 @@ public:
         _filteredTotalG(1.0f),
         _yawAlignDeg(IMU_YAW_ALIGN_DEG),
         _lastState(BikeState::DYNAMIC),
-        _filterState(2) {
+        _filterState(2),
+        _magCalActive(false),
+        _magCalStartMs(0),
+        _magMinX(999.0f), _magMaxX(-999.0f),
+        _magMinY(999.0f), _magMaxY(-999.0f),
+        _magMinZ(999.0f), _magMaxZ(-999.0f),
+        _magOffsetX(0.0f), _magOffsetY(0.0f), _magOffsetZ(0.0f),
+        _magScaleX(1.0f), _magScaleY(1.0f), _magScaleZ(1.0f) {
         resetRecords();
     }
 
@@ -139,11 +146,19 @@ public:
         _invertRoll = _prefs.getBool("invRoll", IMU_INVERT_ROLL);
         _invertAccel = _prefs.getBool("invAcc", IMU_INVERT_ACCEL);
         _maxLeanThreshold = _prefs.getFloat("maxLeanWarn", DEFAULT_MAX_LEAN_WARN_DEG);
+        _magOffsetX = _prefs.getFloat("magOffX", 0.0f);
+        _magOffsetY = _prefs.getFloat("magOffY", 0.0f);
+        _magOffsetZ = _prefs.getFloat("magOffZ", 0.0f);
+        _magScaleX  = _prefs.getFloat("magScaleX", 1.0f);
+        _magScaleY  = _prefs.getFloat("magScaleY", 1.0f);
+        _magScaleZ  = _prefs.getFloat("magScaleZ", 1.0f);
         _prefs.end();
 
         _dynamics.maxLeanThreshold = _maxLeanThreshold;
         Serial.printf("[FILTER] Loaded: RollOffset=%.2f deg, PitchOffset=%.2f deg | swapXY=%d, invRoll=%d, leanWarn=%.1f\n", 
                       _tareRoll, _tarePitch, _swapXY, _invertRoll, _maxLeanThreshold);
+        Serial.printf("[FILTER] Mag Calibration: Offset=(%.3f, %.3f, %.3f) Scale=(%.2f, %.2f, %.2f)\n",
+                      _magOffsetX, _magOffsetY, _magOffsetZ, _magScaleX, _magScaleY, _magScaleZ);
     }
 
     void resetRecords() {
@@ -208,6 +223,58 @@ public:
     float getTareRoll() const { return _tareRoll; }
     float getTarePitch() const { return _tarePitch; }
     float getRawRoll() const { return _roll; }
+
+    // Magnetometer Calibration Controls
+    void startMagCal() {
+        _magCalActive = true;
+        _magCalStartMs = millis();
+        _magMinX = 999.0f; _magMaxX = -999.0f;
+        _magMinY = 999.0f; _magMaxY = -999.0f;
+        _magMinZ = 999.0f; _magMaxZ = -999.0f;
+        Serial.println("[MAG CAL] *** CALIBRAZIONE BUSSOLA AVVIATA (15s) ***");
+        Serial.println("[MAG CAL] Ruota lentamente la schedina a 360 gradi su tutti gli assi...");
+    }
+
+    void finishMagCal() {
+        if (!_magCalActive) return;
+        _magCalActive = false;
+        float spanX = _magMaxX - _magMinX;
+        float spanY = _magMaxY - _magMinY;
+        float spanZ = _magMaxZ - _magMinZ;
+        if (spanX > 0.08f && spanY > 0.08f) {
+            _magOffsetX = (_magMaxX + _magMinX) * 0.5f;
+            _magOffsetY = (_magMaxY + _magMinY) * 0.5f;
+            _magOffsetZ = (spanZ > 0.08f) ? ((_magMaxZ + _magMinZ) * 0.5f) : 0.0f;
+            float avgSpan = (spanX + spanY) * 0.5f;
+            _magScaleX = avgSpan / spanX;
+            _magScaleY = avgSpan / spanY;
+            _magScaleZ = (spanZ > 0.08f) ? (avgSpan / spanZ) : 1.0f;
+
+            _prefs.begin("fz8_cal", false);
+            _prefs.putFloat("magOffX", _magOffsetX);
+            _prefs.putFloat("magOffY", _magOffsetY);
+            _prefs.putFloat("magOffZ", _magOffsetZ);
+            _prefs.putFloat("magScaleX", _magScaleX);
+            _prefs.putFloat("magScaleY", _magScaleY);
+            _prefs.putFloat("magScaleZ", _magScaleZ);
+            _prefs.end();
+            Serial.printf("[MAG CAL] SALVATA! Offset=(%.3f, %.3f, %.3f) Scale=(%.2f, %.2f, %.2f)\n",
+                          _magOffsetX, _magOffsetY, _magOffsetZ, _magScaleX, _magScaleY, _magScaleZ);
+        } else {
+            Serial.printf("[MAG CAL] Annullata o escursione insufficiente (spanX=%.3f, spanY=%.3f).\n", spanX, spanY);
+        }
+    }
+
+    bool isMagCalibrating() const { return _magCalActive; }
+    uint32_t getMagCalRemainingSec() const {
+        if (!_magCalActive) return 0;
+        uint32_t elapsed = (millis() - _magCalStartMs) / 1000;
+        return (elapsed >= 15) ? 0 : (15 - elapsed);
+    }
+    void getMagCalibration(float& offX, float& offY, float& offZ, float& scX, float& scY, float& scZ) const {
+        offX = _magOffsetX; offY = _magOffsetY; offZ = _magOffsetZ;
+        scX = _magScaleX; scY = _magScaleY; scZ = _magScaleZ;
+    }
     float getRawPitch() const { return _pitch; }
     float getFilteredTotalG() const { return _filteredTotalG; }
     float getGyroBiasRoll() const { return _gyroBiasRollDps; }
@@ -522,10 +589,54 @@ public:
             if (raw.altitude_m > _dynamics.maxAltitudeM) _dynamics.maxAltitudeM = raw.altitude_m;
         }
 
-        // 9. Heading & Compass with Kinematic Gating
+        // 9. Heading & Compass with Kinematic Gating & Hard-Iron Calibration
+        // Adaptive min/max tracker for auto-calibration and active calibration
+        if (_magCalActive || (_magOffsetX == 0.0f && _magOffsetY == 0.0f)) {
+            if (raw.mx < _magMinX) _magMinX = raw.mx;
+            if (raw.mx > _magMaxX) _magMaxX = raw.mx;
+            if (raw.my < _magMinY) _magMinY = raw.my;
+            if (raw.my > _magMaxY) _magMaxY = raw.my;
+            if (raw.mz < _magMinZ) _magMinZ = raw.mz;
+            if (raw.mz > _magMaxZ) _magMaxZ = raw.mz;
+
+            float spanX = _magMaxX - _magMinX;
+            float spanY = _magMaxY - _magMinY;
+            if (!_magCalActive && spanX > 0.15f && spanY > 0.15f) {
+                // Initial auto-seed so compass works right out of the box even before manual calibration
+                _magOffsetX = (_magMaxX + _magMinX) * 0.5f;
+                _magOffsetY = (_magMaxY + _magMinY) * 0.5f;
+                if (_magMaxZ - _magMinZ > 0.15f) _magOffsetZ = (_magMaxZ + _magMinZ) * 0.5f;
+            }
+        }
+
+        if (_magCalActive && (millis() - _magCalStartMs >= 15000)) {
+            finishMagCal();
+        }
+
+        // Apply Hard-Iron Offset & Soft-Iron Scaling
+        float calMx = (raw.mx - _magOffsetX) * _magScaleX;
+        float calMy = (raw.my - _magOffsetY) * _magScaleY;
+        float calMz = (raw.mz - _magOffsetZ) * _magScaleZ;
+
+        // Transform Magnetometer to Motorcycle Body Coordinates
+        // With USB-C pointing towards motorcycle front (_swapXY == true):
+        //   Longitudinal Forward = +Y axis of sensor (calMy)
+        //   Lateral Right        = +X axis of sensor (calMx)
+        //   Vertical Up          = +Z axis of sensor (calMz)
+        float mx_body, my_body, mz_body;
+        if (_swapXY) {
+            mx_body = calMy;
+            my_body = calMx;
+            mz_body = calMz;
+        } else {
+            mx_body = calMx;
+            my_body = calMy;
+            mz_body = calMz;
+        }
+
         SensorsGY89::computeTiltCompensatedHeading(effectiveRoll, effectivePitch, 
                                                   _dynamics.gLateral, _dynamics.yawRateDps,
-                                                  raw.mx, raw.my, raw.mz, 
+                                                  mx_body, my_body, mz_body, 
                                                   _dynamics.headingDeg, _dynamics.cardinal,
                                                   _dynamics.isHeadingValid);
 
@@ -695,6 +806,15 @@ private:
     float _yawAlignDeg;           // Horizontal yaw alignment trim (degrees)
     BikeState _lastState;         // Current filter state
     uint8_t _filterState;         // 0=STATIONARY, 1=STRAIGHT, 2=DYNAMIC (for debug)
+
+    // Magnetometer Calibration State
+    bool _magCalActive;
+    uint32_t _magCalStartMs;
+    float _magMinX, _magMaxX;
+    float _magMinY, _magMaxY;
+    float _magMinZ, _magMaxZ;
+    float _magOffsetX, _magOffsetY, _magOffsetZ;
+    float _magScaleX, _magScaleY, _magScaleZ;
 };
 
 #endif // MOTORCYCLE_FILTER_H
