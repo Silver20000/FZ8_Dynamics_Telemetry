@@ -162,8 +162,9 @@ public:
         }
 
         File binFile = LittleFS.open(SESSION_BIN_PATH, "r");
-        if (!binFile) {
-            server.send(500, "text/plain", "Errore apertura sessione binaria.");
+        if (!binFile || binFile.size() == 0) {
+            if (binFile) binFile.close();
+            server.send(404, "text/plain", "Sessione vuota o non valida.");
             return false;
         }
 
@@ -173,16 +174,36 @@ public:
             return false;
         }
 
-        // Send HTTP headers for chunked streaming
-        server.sendHeader("Content-Type", "text/csv");
+        // Send HTTP headers for chunked streaming with standard CRLF CSV format
+        server.sendHeader("Content-Type", "text/csv; charset=utf-8");
         server.sendHeader("Content-Disposition", "attachment; filename=\"fz8_session.csv\"");
         server.sendHeader("Connection", "close");
         server.setContentLength(CONTENT_LENGTH_UNKNOWN);
         server.send(200, "text/csv", "");
 
-        // CSV Header row
-        static const char CSV_HEADER[] = "timestamp_ms,roll_deg,pitch_deg,heading_deg,heading_valid,g_lon,g_lat,alt_m,d_plus_m,temp_c,is_cornering,is_braking,is_accel,is_warn,is_crash\n";
-        server.sendContent(CSV_HEADER);
+        // CSV Header row with RFC 4180 standard CRLF (\r\n)
+        static const char CSV_HEADER[] = "timestamp_ms,roll_deg,pitch_deg,heading_deg,heading_valid,g_lon,g_lat,alt_m,d_plus_m,temp_c,is_cornering,is_braking,is_accel,is_warn,is_crash\r\n";
+        
+        // 1024-byte TX aggregation buffer: eliminates TCP packet fragmentation & browser corrupt download errors
+        char txBuffer[1024];
+        size_t txLen = 0;
+
+        auto flushTx = [&]() {
+            if (txLen > 0) {
+                server.sendContent(txBuffer, txLen);
+                txLen = 0;
+            }
+        };
+
+        auto appendTx = [&](const char* str, size_t len) {
+            if (txLen + len >= sizeof(txBuffer)) {
+                flushTx();
+            }
+            memcpy(txBuffer + txLen, str, len);
+            txLen += len;
+        };
+
+        appendTx(CSV_HEADER, strlen(CSV_HEADER));
 
         // Read in chunks of 25 binary structs (500 bytes)
         const size_t CHUNK_SAMPLES = 25;
@@ -196,7 +217,7 @@ public:
             for (size_t i = 0; i < samplesRead; i++) {
                 const LogSampleBinary& s = readChunk[i];
                 int lineLen = snprintf(lineBuf, sizeof(lineBuf),
-                    "%lu,%.1f,%.1f,%.1f,%d,%.2f,%.2f,%.1f,%.1f,%d,%d,%d,%d,%d,%d\n",
+                    "%lu,%.1f,%.1f,%.1f,%d,%.2f,%.2f,%.1f,%.1f,%d,%d,%d,%d,%d,%d\r\n",
                     (unsigned long)s.timestampMs,
                     s.roll_cdeg * 0.01f,
                     s.pitch_cdeg * 0.01f,
@@ -214,13 +235,63 @@ public:
                     (s.flags & 0x10) ? 1 : 0
                 );
                 if (lineLen > 0) {
-                    server.sendContent(lineBuf);
+                    appendTx(lineBuf, (size_t)lineLen);
                 }
             }
         }
 
+        flushTx();
         server.sendContent(""); // Terminate chunked HTTP transfer
         binFile.close();
+        return true;
+    }
+
+    // Direct Serial Export for debugging and offline CSV download
+    bool dumpCsvToSerial(Stream& out) {
+        if (!_fsMounted || !LittleFS.exists(SESSION_BIN_PATH)) {
+            out.println("[LOGGER] Nessuna sessione memorizzata su Flash LittleFS.");
+            return false;
+        }
+        if (_isLogging) {
+            flushBufferToFlash();
+        }
+        File binFile = LittleFS.open(SESSION_BIN_PATH, "r");
+        if (!binFile || binFile.size() == 0) {
+            if (binFile) binFile.close();
+            out.println("[LOGGER] File di sessione vuoto.");
+            return false;
+        }
+
+        out.printf("[LOGGER] Inizio Dump CSV (%u bytes totali)...\n", (unsigned)binFile.size());
+        out.println("timestamp_ms,roll_deg,pitch_deg,heading_deg,heading_valid,g_lon,g_lat,alt_m,d_plus_m,temp_c,is_cornering,is_braking,is_accel,is_warn,is_crash");
+
+        LogSampleBinary s;
+        char lineBuf[160];
+        uint32_t count = 0;
+        while (binFile.read((uint8_t*)&s, sizeof(LogSampleBinary)) == sizeof(LogSampleBinary)) {
+            snprintf(lineBuf, sizeof(lineBuf),
+                "%lu,%.1f,%.1f,%.1f,%d,%.2f,%.2f,%.1f,%.1f,%d,%d,%d,%d,%d,%d",
+                (unsigned long)s.timestampMs,
+                s.roll_cdeg * 0.01f,
+                s.pitch_cdeg * 0.01f,
+                s.heading_cdeg * 0.01f,
+                (s.flags & 0x20) ? 1 : 0,
+                s.gLon_mG * 0.001f,
+                s.gLat_mG * 0.001f,
+                s.alt_dm * 0.1f,
+                s.dPlus_dm * 0.1f,
+                (int)s.temp_c,
+                (s.flags & 0x01) ? 1 : 0,
+                (s.flags & 0x02) ? 1 : 0,
+                (s.flags & 0x04) ? 1 : 0,
+                (s.flags & 0x08) ? 1 : 0,
+                (s.flags & 0x10) ? 1 : 0
+            );
+            out.println(lineBuf);
+            count++;
+        }
+        binFile.close();
+        out.printf("[LOGGER] Dump completato: %u righe CSV esportate con successo.\n", count);
         return true;
     }
 

@@ -1,4 +1,4 @@
-﻿#ifndef MOTORCYCLE_FILTER_H
+#ifndef MOTORCYCLE_FILTER_H
 #define MOTORCYCLE_FILTER_H
 
 #include <Arduino.h>
@@ -22,6 +22,12 @@
 //   Gentle drift compensation aligns roll with true gravity and tracks bias.
 // ==============================================================================
 
+enum class BikeState : uint8_t {
+    STATIONARY = 0,
+    STRAIGHT   = 1,
+    DYNAMIC    = 2
+};
+
 struct CornerRecord {
     bool isLeft;
     float maxRollDeg;
@@ -44,6 +50,10 @@ struct MotorcycleDynamics {
     bool isCornering;           // True when currently in a turn
     bool isBraking;             // True when braking (> 0.25G deceleration)
     bool isAccelerating;        // True when accelerating (> 0.20G)
+
+    // TPS Throttle
+    float tpsPercent;           // Throttle position (0.0 to 100.0%)
+    uint16_t tpsRawAdc;         // Raw ADC value from TPS pin
 
     // Heading & Compass
     float headingDeg;           // 0 - 360 degrees
@@ -77,8 +87,6 @@ struct MotorcycleDynamics {
     bool isWheelie;             // True if pitch > +6.5 deg
     bool isStoppie;             // True if pitch < -5.5 deg and braking
     
-    float tpsPercent;           // 0.0 - 100.0% Throttle Position (TPS)
-    uint16_t tpsRawAdc;         // Raw ADC value
     float altitudeM;            // Current barometric altitude
     float minAltitudeM;         // Min elevation in session
     float maxAltitudeM;         // Max elevation in session
@@ -110,7 +118,15 @@ public:
         _cornerMaxRoll(0.0f),
         _cornerMaxRate(0.0f),
         _cornerIsLeft(false),
-        _crashStartTime(0) {
+        _crashStartTime(0),
+        _gyroBiasRollDps(0.0f),
+        _gyroBiasPitchDps(0.0f),
+        _straightConfirmMs(0),
+        _lastStraightStartMs(0),
+        _filteredTotalG(1.0f),
+        _yawAlignDeg(IMU_YAW_ALIGN_DEG),
+        _lastState(BikeState::DYNAMIC),
+        _filterState(2) {
         resetRecords();
     }
 
@@ -118,6 +134,7 @@ public:
         _prefs.begin("fz8_cal", false);
         _tareRoll = _prefs.getFloat("tareRoll", MANUAL_ROLL_OFFSET_DEG);
         _tarePitch = _prefs.getFloat("tarePitch", MANUAL_PITCH_OFFSET_DEG);
+        _yawAlignDeg = _prefs.getFloat("yawAlign", IMU_YAW_ALIGN_DEG);
         _swapXY = _prefs.getBool("swapXY", IMU_SWAP_XY);
         _invertRoll = _prefs.getBool("invRoll", IMU_INVERT_ROLL);
         _invertAccel = _prefs.getBool("invAcc", IMU_INVERT_ACCEL);
@@ -134,8 +151,6 @@ public:
         _dynamics.maxLeanRight = 0.0f;
         _dynamics.maxBrakingG = 0.0f;
         _dynamics.maxAccelG = 0.0f;
-        _dynamics.tpsPercent = 0.0f;
-        _dynamics.tpsRawAdc = 0;
         _dynamics.maxPitchUp = 0.0f;
         _dynamics.maxPitchDown = 0.0f;
         _dynamics.isWheelie = false;
@@ -194,6 +209,28 @@ public:
     float getTarePitch() const { return _tarePitch; }
     float getRawRoll() const { return _roll; }
     float getRawPitch() const { return _pitch; }
+    float getFilteredTotalG() const { return _filteredTotalG; }
+    float getGyroBiasRoll() const { return _gyroBiasRollDps; }
+    float getGyroBiasPitch() const { return _gyroBiasPitchDps; }
+    BikeState getState() const { return _lastState; }
+    uint8_t getFilterState() const { return _filterState; }
+    float getYawAlign() const { return _yawAlignDeg; }
+
+    void setYawAlign(float deg) {
+        _yawAlignDeg = deg;
+        _prefs.begin("fz8_cal", false);
+        _prefs.putFloat("yawAlign", _yawAlignDeg);
+        _prefs.end();
+        Serial.printf("[FILTER] Yaw Align Salvato: %+.2f deg\n", _yawAlignDeg);
+    }
+
+    void adjustYawAlign(float deltaDeg) {
+        setYawAlign(_yawAlignDeg + deltaDeg);
+    }
+
+    void resetYawAlign() {
+        setYawAlign(IMU_YAW_ALIGN_DEG);
+    }
 
     bool getSwapXY() const { return _swapXY; }
     bool getInvertRoll() const { return _invertRoll; }
@@ -238,6 +275,7 @@ public:
         if (_firstRun) {
             _lastUpdateMicros = nowMicros;
             _firstRun = false;
+            _lastStraightStartMs = millis();
             if (raw.altitude_m != 0.0f) {
                 _dynamics.minAltitudeM = raw.altitude_m;
                 _dynamics.maxAltitudeM = raw.altitude_m;
@@ -248,11 +286,11 @@ public:
         float dt = (nowMicros - _lastUpdateMicros) * 1e-6f;
         _lastUpdateMicros = nowMicros;
         if (dt <= 0.0f || dt > 0.1f) dt = 0.01f; // Clamp anomalous dt
+        uint32_t nowMs = nowMicros / 1000;
 
         // 0. Axis Mapping & 90-degree Rotation
         float ax, ay, az, gx, gy, gz;
         if (_swapXY) {
-            // Rotate coordinate frame by 90 degrees
             ax = raw.ay;
             ay = -raw.ax;
             az = raw.az;
@@ -277,39 +315,127 @@ public:
             gy = -gy;
         }
 
-        // 1. Calculate Acceleration Vector Magnitude
-        float totalG = sqrtf(ax * ax + ay * ay + az * az);
+        // 0b. Disaccoppiamento Rotazionale Orizzontale (Yaw Trim / Allineamento Telaio)
+        // Elimina matematicamente il cross-coupling tra Rollio e Beccheggio
+        if (fabsf(_yawAlignDeg) > 0.01f) {
+            float rad = _yawAlignDeg * ((float)M_PI / 180.0f);
+            float cosY = cosf(rad);
+            float sinY = sinf(rad);
 
-        // 2. Direct Accelerometer Tilt Angles
+            float ax_rot = ax * cosY - ay * sinY;
+            float ay_rot = ax * sinY + ay * cosY;
+            ax = ax_rot;
+            ay = ay_rot;
+
+            float gx_rot = gx * cosY - gy * sinY;
+            float gy_rot = gx * sinY + gy * cosY;
+            gx = gx_rot;
+            gy = gy_rot;
+        }
+
+        // 1. Modulo accelerazione istantaneo e filtrato passa-basso IIR a 1 polo
+        // Taglia rumore picco-picco ad alta frequenza da vibrazioni motore e rugosità asfalto
+        float rawTotalG = sqrtf(ax * ax + ay * ay + az * az);
+        _filteredTotalG = 0.90f * _filteredTotalG + 0.10f * rawTotalG;
+
+        // 2. Compensazione Bias Giroscopio su asse Roll (X) e Pitch (Y)
+        float gxCorrected = gx - _gyroBiasRollDps;
+        float gyCorrected = gy - _gyroBiasPitchDps;
+
+        // 3. Risoluzione Angolo Accelerometro puro
         float accelRoll = atan2f(ay, az) * (180.0f / (float)M_PI);
         float accelPitch = atan2f(-ax, sqrtf(ay * ay + az * az)) * (180.0f / (float)M_PI);
 
-        // 3. Stationary Detection (Auto-lock to gravity when still -> ELIMINATES DRIFT)
-        bool isStationary = (fabsf(gx) < 2.5f && fabsf(gy) < 2.5f && fabsf(gz) < 2.5f && 
-                             fabsf(totalG - 1.0f) < 0.18f);
+        // 4. Modulo rotazione angolare totale (|omega|)
+        float totalOmega = sqrtf(gx * gx + gy * gy + gz * gz);
 
-        // 4. Dynamic Motorcycle Cornering Detection (Centripetal load + Yaw rate)
-        bool isCornering = (fabsf(gz) > 4.0f && totalG > 1.10f);
+        // =====================================================================
+        // 5. RICONOSCIMENTO STATO (Gating a 3 Stati Anti-Trappola Curva Coordinata)
+        // =====================================================================
+        bool lowRotation = (totalOmega < GATE_GYRO_MAX_DPS);
+        bool validGNorm  = (_filteredTotalG >= GATE_TOTAL_G_MIN && _filteredTotalG <= GATE_TOTAL_G_MAX);
+        bool lowLongAcc  = (fabsf(ax) < GATE_AX_MAX);
+        bool lowLatAcc   = (fabsf(ay) < GATE_AY_MAX);
 
-        // 5. Adaptive Complementary Weight
-        float alpha;
-        if (isStationary) {
-            // Firmly lock to gravity when still -> ZERO RUNAWAY DRIFT!
-            alpha = 0.85f;
-            _dynamics.isCornering = false;
-        } else if (isCornering) {
-            // High-G curve: rely heavily on gyro integration (prevent curve pull-down)
-            alpha = 0.9992f;
-            _dynamics.isCornering = true;
+        // Controllo moto dritta: in piega coordinata ay ~ 0, omega puo' scendere se raggio ampio,
+        // ma la moto ha un angolo di rollio reale e totalG = 1/cos(theta).
+        // Se la stima di rollio e' inclinata (|effectiveRoll| > 4.0 deg), NON e' rettilineo!
+        float currentEffectiveRoll = _roll - _tareRoll;
+        bool isNearUpright = (fabsf(currentEffectiveRoll) < 4.0f);
+
+        BikeState currentState = BikeState::DYNAMIC;
+
+        if (totalOmega < 2.0f && fabsf(_filteredTotalG - 1.0f) < 0.04f && lowLongAcc && lowLatAcc) {
+            // Moto ferma (motore al minimo o spenta)
+            currentState = BikeState::STATIONARY;
+            _straightConfirmMs = 0;
+        } else if (lowRotation && validGNorm && lowLongAcc && lowLatAcc && isNearUpright) {
+            // Condizione potenziale di rettilineo: richiede conferma temporale continua (350 ms)
+            _straightConfirmMs += static_cast<uint32_t>(dt * 1000.0f);
+            if (_straightConfirmMs >= STRAIGHT_HOLD_MS) {
+                currentState = BikeState::STRAIGHT;
+            } else {
+                currentState = BikeState::DYNAMIC;
+            }
         } else {
-            // Normal straight riding or transitions
-            alpha = 0.985f;
-            _dynamics.isCornering = false;
+            // Accelerazione (ax), staccata, piega, asfalto dissestato
+            currentState = BikeState::DYNAMIC;
+            _straightConfirmMs = 0;
         }
 
-        // Integration + Complementary Correction
-        _roll = alpha * (_roll + gx * dt) + (1.0f - alpha) * accelRoll;
-        _pitch = 0.98f * (_pitch + gy * dt) + 0.02f * accelPitch;
+        // =====================================================================
+        // 6. ESECUZIONE FILTRO COMPLEMENTARE & BIAS TRACKER PROTETTO
+        // =====================================================================
+        float alpha = ALPHA_DYNAMIC;
+
+        switch (currentState) {
+            case BikeState::STATIONARY:
+                alpha = ALPHA_STATIONARY;
+                _dynamics.isCornering = false;
+                // Da fermo aggiorniamo il bias rapidamente se la moto è stabile
+                _gyroBiasRollDps += (gx - _gyroBiasRollDps) * 0.005f;
+                _gyroBiasPitchDps += (gy - _gyroBiasPitchDps) * 0.005f;
+                break;
+
+            case BikeState::STRAIGHT:
+                alpha = ALPHA_STRAIGHT;
+                _dynamics.isCornering = false;
+                // Tracking lento del bias: correggiamo solo l'errore sistematico residuo
+                {
+                    float rollError = accelRoll - _roll;
+                    // Se l'errore è contenuto (< 5 gradi), è drift; altrimenti è pendenza/schiena d'asino
+                    if (fabsf(rollError) < 5.0f) {
+                        _gyroBiasRollDps -= (rollError * dt) * BIAS_LEARN_RATE;
+                        // Limitazione clamp anti-windup
+                        if (_gyroBiasRollDps > BIAS_MAX_DPS_LIMIT) _gyroBiasRollDps = BIAS_MAX_DPS_LIMIT;
+                        if (_gyroBiasRollDps < -BIAS_MAX_DPS_LIMIT) _gyroBiasRollDps = -BIAS_MAX_DPS_LIMIT;
+                    }
+                    float pitchError = accelPitch - _pitch;
+                    if (fabsf(pitchError) < 5.0f) {
+                        _gyroBiasPitchDps -= (pitchError * dt) * BIAS_LEARN_RATE;
+                        if (_gyroBiasPitchDps > BIAS_MAX_DPS_LIMIT) _gyroBiasPitchDps = BIAS_MAX_DPS_LIMIT;
+                        if (_gyroBiasPitchDps < -BIAS_MAX_DPS_LIMIT) _gyroBiasPitchDps = -BIAS_MAX_DPS_LIMIT;
+                    }
+                }
+                break;
+
+            case BikeState::DYNAMIC:
+            default:
+                alpha = ALPHA_DYNAMIC; // 1.0f: esclude interamente l'accelerometro
+                _dynamics.isCornering = (fabsf(gz) > 4.0f || _filteredTotalG > 1.08f || fabsf(currentEffectiveRoll) > 8.0f);
+                break;
+        }
+
+        _filterState = static_cast<uint8_t>(currentState);
+        _lastState = currentState;
+
+        // 7. Integrazione stato Roll e Pitch con Disaccoppiamento Cinematico 3D di Eulero
+        // dTheta = gy * cos(roll) - gz * sin(roll) annulla la proiezione di imbardata sul beccheggio
+        float rollRad = _roll * ((float)M_PI / 180.0f);
+        float pitchRate = gyCorrected * cosf(rollRad) - gz * sinf(rollRad);
+
+        _roll = alpha * (_roll + gxCorrected * dt) + (1.0f - alpha) * accelRoll;
+        _pitch = alpha * (_pitch + pitchRate * dt) + (1.0f - alpha) * accelPitch;
 
         // Apply Tare Offset (Motorcycle body frame)
         float effectiveRoll = _roll - _tareRoll;
@@ -318,7 +444,7 @@ public:
         // 5. Dynamics State & Gravity-Compensated Dynamic G-Forces
         _dynamics.rollDeg = effectiveRoll;
         _dynamics.pitchDeg = effectivePitch;
-        _dynamics.rollRateDps = gx;
+        _dynamics.rollRateDps = gxCorrected;
         _dynamics.yawRateDps = gz;
 
         // Rotate sensor acceleration (ax, ay, az) by (-tarePitch, -tareRoll) into motorcycle chassis frame:
@@ -347,14 +473,13 @@ public:
         float gravY = cosf(motoPitchRad) * sinf(motoRollRad);
 
         // TRUE Dynamic G-Forces: subtract static 1G gravity tilt
-        // Tilting the bike in roll/pitch will NOT falsely produce longitudinal/lateral G!
-        float dynLongitudinal = ax_moto - gravX; // Pure forward acceleration / braking
-        float dynLateral = ay_moto - gravY;      // Pure cornering G
+        float dynLongitudinal = ax_moto - gravX;
+        float dynLateral = ay_moto - gravY;
 
         _dynamics.gLongitudinal = dynLongitudinal;
         _dynamics.gLateral = dynLateral;
         _dynamics.gVertical = az_moto;
-        _dynamics.totalG = totalG;
+        _dynamics.totalG = _filteredTotalG;
 
         _dynamics.isBraking = (dynLongitudinal < -0.25f);
         _dynamics.isAccelerating = (dynLongitudinal > 0.20f);
@@ -405,7 +530,6 @@ public:
                                                   _dynamics.isHeadingValid);
 
         // 10. Advanced Altimetry: Dynamic Low-Pass IIR Filter & Deadband D+ Accumulator
-        uint32_t nowMs = nowMicros / 1000;
         if (raw.altitude_m > 0.0f) {
             if (_filteredAltM == 0.0f) {
                 _filteredAltM = raw.altitude_m;
@@ -516,7 +640,7 @@ public:
 
         // 13. Crash Detection (Bike on ground > 65 deg, stationary roll-rate < 12 deg/s, static gravity 1G for > 3.5s)
         bool rollStationary = (fabsf(gx) < CRASH_DETECT_MAX_RATE_DPS);
-        bool accelGravityStatic = (fabsf(totalG - 1.0f) < CRASH_DETECT_ACCEL_TOL_G);
+        bool accelGravityStatic = (fabsf(_filteredTotalG - 1.0f) < CRASH_DETECT_ACCEL_TOL_G);
 
         if (absRoll >= CRASH_DETECT_ROLL_DEG && rollStationary && accelGravityStatic) {
             if (_crashStartTime == 0) _crashStartTime = nowMs;
@@ -561,7 +685,16 @@ private:
 
     uint32_t _crashStartTime;
     MotorcycleDynamics _dynamics;
+
+    // Gyro Bias Tracker state
+    float _gyroBiasRollDps;       // Estimated gyro roll bias (deg/s)
+    float _gyroBiasPitchDps;      // Estimated gyro pitch bias (deg/s)
+    uint32_t _straightConfirmMs;  // Temporal confirmation counter
+    uint32_t _lastStraightStartMs;// Timestamp when straight conditions started
+    float _filteredTotalG;        // Low-pass filtered Total G magnitude (IIR 1-pole)
+    float _yawAlignDeg;           // Horizontal yaw alignment trim (degrees)
+    BikeState _lastState;         // Current filter state
+    uint8_t _filterState;         // 0=STATIONARY, 1=STRAIGHT, 2=DYNAMIC (for debug)
 };
 
 #endif // MOTORCYCLE_FILTER_H
-

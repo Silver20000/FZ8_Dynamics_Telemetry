@@ -1,4 +1,4 @@
-﻿#include <Arduino.h>
+#include <Arduino.h>
 #include <Wire.h>
 #include <WiFi.h>
 #include <esp_now.h>
@@ -187,11 +187,17 @@ void handleSerial() {
     while (Serial.available()) {
         char c = Serial.read();
         if (c == 's' || c == 'S') {
-            Serial.printf("[STATUS] Roll: %.1f deg, Pitch: %.1f deg, GLat: %.2f G, GLong: %.2f G, TPS: %.1f%% (ADC:%d) | AutoCal: %s (%d%%)\n",
+            Serial.printf("[STATUS] Roll: %+.1f deg, Pitch: %+.1f deg | GLat: %+.2f G, GLong: %+.2f G | Alt: %.1f m (D+: %.1f m), Temp: %.1f C | Head: %.0f deg (%s, %s) | TPS: %.1f%% (ADC:%d) | Log: %s (%u smp, %u KB)\n",
                 currentDynamics.rollDeg, currentDynamics.pitchDeg,
                 currentDynamics.gLateral, currentDynamics.gLongitudinal,
+                currentDynamics.altitudeM, currentDynamics.totalElevationGainM, currentDynamics.tempC,
+                currentDynamics.headingDeg, currentDynamics.cardinal,
+                currentDynamics.isHeadingValid ? "VALID" : "TILT_GATE",
                 currentDynamics.tpsPercent, (int)filteredTpsAdc,
-                autoCal.isRunning() ? "IN CORSO" : "IDLE", autoCal.getProgressPercent());
+                sessionLogger.isLogging() ? "REC" : "IDLE",
+                sessionLogger.getSampleCount(), (unsigned)(sessionLogger.getFileSize() / 1024));
+        } else if (c == 'd' || c == 'D') {
+            sessionLogger.dumpCsvToSerial(Serial);
         } else if (c == 'a' || c == 'A') {
             if (autoCal.isRunning()) autoCal.cancel();
             else autoCal.start();
@@ -211,7 +217,17 @@ void handleSerial() {
         } else if (c == 'l' || c == 'L') {
             if (sessionLogger.isLogging()) sessionLogger.stopSession();
             else sessionLogger.startSession();
-            Serial.printf("[SERIAL] Datalogger: %s\n", sessionLogger.isLogging() ? "REC" : "STOP");
+        } else if (c == '+') {
+            motoFilter.adjustYawAlign(1.0f);
+            Serial.printf("[SERIAL] YawAlign: %+.1f deg\n", motoFilter.getYawAlign());
+        } else if (c == '-') {
+            motoFilter.adjustYawAlign(-1.0f);
+            Serial.printf("[SERIAL] YawAlign: %+.1f deg\n", motoFilter.getYawAlign());
+        } else if (c == '0') {
+            motoFilter.resetYawAlign();
+            Serial.printf("[SERIAL] YawAlign reset: %+.1f deg\n", motoFilter.getYawAlign());
+        } else if (c == 'y' || c == 'Y') {
+            Serial.printf("[SERIAL] YawAlign attuale: %+.2f deg\n", motoFilter.getYawAlign());
         } else if (c >= '1' && c <= '9') {
             selectedScreenIndex = c - '1';
             Serial.printf("[SERIAL] Selected Screen: %d\n", selectedScreenIndex);
