@@ -177,8 +177,14 @@ public:
 
         outValid = isStraight;
 
-        float rollRad = rollDeg * ((float)M_PI / 180.0f);
-        float pitchRad = pitchDeg * ((float)M_PI / 180.0f);
+        // Clamp roll/pitch angles for de-rotation to physical limits
+        float clampedRoll = constrain(rollDeg, -45.0f, 45.0f);
+        float clampedPitch = constrain(pitchDeg, -30.0f, 30.0f);
+        if (fabsf(clampedRoll) < 1.0f) clampedRoll = 0.0f;
+        if (fabsf(clampedPitch) < 1.0f) clampedPitch = 0.0f;
+
+        float rollRad = clampedRoll * ((float)M_PI / 180.0f);
+        float pitchRad = clampedPitch * ((float)M_PI / 180.0f);
 
         float cp = cosf(pitchRad);
         float sp = sinf(pitchRad);
@@ -195,7 +201,20 @@ public:
         if (heading < 0.0f) heading += 360.0f;
         if (heading >= 360.0f) heading -= 360.0f;
 
-        outHeading = heading;
+        // Circular IIR filter for smooth, rock-steady heading
+        static float filteredHead = -1.0f;
+        if (filteredHead < 0.0f) {
+            filteredHead = heading;
+        } else {
+            float diff = heading - filteredHead;
+            while (diff < -180.0f) diff += 360.0f;
+            while (diff > 180.0f) diff -= 360.0f;
+            filteredHead += diff * 0.20f;
+            if (filteredHead < 0.0f) filteredHead += 360.0f;
+            if (filteredHead >= 360.0f) filteredHead -= 360.0f;
+        }
+
+        outHeading = filteredHead;
 
         if (heading >= 337.5f || heading < 22.5f) strcpy(outCardinal, "N");
         else if (heading >= 22.5f && heading < 67.5f) strcpy(outCardinal, "NE");

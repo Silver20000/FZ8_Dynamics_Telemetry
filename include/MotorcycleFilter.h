@@ -152,6 +152,17 @@ public:
         _magScaleX  = _prefs.getFloat("magScaleX", 1.0f);
         _magScaleY  = _prefs.getFloat("magScaleY", 1.0f);
         _magScaleZ  = _prefs.getFloat("magScaleZ", 1.0f);
+
+        // Sanity check on tare: reset if anomalous/corrupted from previous drift
+        if (fabsf(_tareRoll) > 45.0f) {
+            Serial.printf("[FILTER] TareRoll (%.1f) anomalo rilevato! Resettato a 0.0\n", _tareRoll);
+            _tareRoll = 0.0f;
+            _prefs.putFloat("tareRoll", 0.0f);
+        }
+        if (fabsf(_tarePitch) > 30.0f) {
+            _tarePitch = 0.0f;
+            _prefs.putFloat("tarePitch", 0.0f);
+        }
         _prefs.end();
 
         _dynamics.maxLeanThreshold = _maxLeanThreshold;
@@ -339,17 +350,6 @@ public:
 
     void update(const IMURawData& raw, MotorcycleDynamics& outDynamics) {
         uint32_t nowMicros = micros();
-        if (_firstRun) {
-            _lastUpdateMicros = nowMicros;
-            _firstRun = false;
-            _lastStraightStartMs = millis();
-            if (raw.altitude_m != 0.0f) {
-                _dynamics.minAltitudeM = raw.altitude_m;
-                _dynamics.maxAltitudeM = raw.altitude_m;
-            }
-            return;
-        }
-
         float dt = (nowMicros - _lastUpdateMicros) * 1e-6f;
         _lastUpdateMicros = nowMicros;
         if (dt <= 0.0f || dt > 0.1f) dt = 0.01f; // Clamp anomalous dt
@@ -380,6 +380,23 @@ public:
         if (_invertAccel) {
             ax = -ax;
             gy = -gy;
+        }
+
+        // Pure accelerometer tilt angles
+        float initAccelRoll = atan2f(ay, az) * (180.0f / (float)M_PI);
+        float initAccelPitch = atan2f(-ax, sqrtf(ay * ay + az * az)) * (180.0f / (float)M_PI);
+
+        if (_firstRun) {
+            _lastUpdateMicros = nowMicros;
+            _firstRun = false;
+            _lastStraightStartMs = millis();
+            _roll = initAccelRoll;
+            _pitch = initAccelPitch;
+            if (raw.altitude_m != 0.0f) {
+                _dynamics.minAltitudeM = raw.altitude_m;
+                _dynamics.maxAltitudeM = raw.altitude_m;
+            }
+            return;
         }
 
         // 0b. Disaccoppiamento Rotazionale Orizzontale (Yaw Trim / Allineamento Telaio)
@@ -419,25 +436,23 @@ public:
         // =====================================================================
         // 5. RICONOSCIMENTO STATO (Gating a 3 Stati Anti-Trappola Curva Coordinata)
         // =====================================================================
+        // Quando la moto o schedina è ferma (totalOmega < 2.5 deg/s e gravità pura ~1g),
+        // NON c'è accelerazione centripeta o di marcia: siamo SEMPRE in STATIONARY!
+        bool isStationary = (totalOmega < 2.5f && fabsf(_filteredTotalG - 1.0f) < 0.10f);
+
         bool lowRotation = (totalOmega < GATE_GYRO_MAX_DPS);
         bool validGNorm  = (_filteredTotalG >= GATE_TOTAL_G_MIN && _filteredTotalG <= GATE_TOTAL_G_MAX);
         bool lowLongAcc  = (fabsf(ax) < GATE_AX_MAX);
         bool lowLatAcc   = (fabsf(ay) < GATE_AY_MAX);
-
-        // Controllo moto dritta: in piega coordinata ay ~ 0, omega puo' scendere se raggio ampio,
-        // ma la moto ha un angolo di rollio reale e totalG = 1/cos(theta).
-        // Se la stima di rollio e' inclinata (|effectiveRoll| > 4.0 deg), NON e' rettilineo!
         float currentEffectiveRoll = _roll - _tareRoll;
-        bool isNearUpright = (fabsf(currentEffectiveRoll) < 4.0f);
+        bool isNearUpright = (fabsf(currentEffectiveRoll) < 6.0f);
 
         BikeState currentState = BikeState::DYNAMIC;
 
-        if (totalOmega < 2.0f && fabsf(_filteredTotalG - 1.0f) < 0.04f && lowLongAcc && lowLatAcc) {
-            // Moto ferma (motore al minimo o spenta)
+        if (isStationary) {
             currentState = BikeState::STATIONARY;
             _straightConfirmMs = 0;
         } else if (lowRotation && validGNorm && lowLongAcc && lowLatAcc && isNearUpright) {
-            // Condizione potenziale di rettilineo: richiede conferma temporale continua (350 ms)
             _straightConfirmMs += static_cast<uint32_t>(dt * 1000.0f);
             if (_straightConfirmMs >= STRAIGHT_HOLD_MS) {
                 currentState = BikeState::STRAIGHT;
@@ -445,7 +460,6 @@ public:
                 currentState = BikeState::DYNAMIC;
             }
         } else {
-            // Accelerazione (ax), staccata, piega, asfalto dissestato
             currentState = BikeState::DYNAMIC;
             _straightConfirmMs = 0;
         }
@@ -457,11 +471,11 @@ public:
 
         switch (currentState) {
             case BikeState::STATIONARY:
-                alpha = ALPHA_STATIONARY;
+                alpha = ALPHA_STATIONARY; // 0.85f: rapido riallineamento all'accelerometro a moto ferma
                 _dynamics.isCornering = false;
-                // Da fermo aggiorniamo il bias rapidamente se la moto è stabile
-                _gyroBiasRollDps += (gx - _gyroBiasRollDps) * 0.005f;
-                _gyroBiasPitchDps += (gy - _gyroBiasPitchDps) * 0.005f;
+                // Da fermo aggiorniamo il bias per azzerare completamente il drift giroscopico
+                _gyroBiasRollDps += (gx - _gyroBiasRollDps) * 0.02f;
+                _gyroBiasPitchDps += (gy - _gyroBiasPitchDps) * 0.02f;
                 break;
 
             case BikeState::STRAIGHT:
@@ -503,6 +517,12 @@ public:
 
         _roll = alpha * (_roll + gxCorrected * dt) + (1.0f - alpha) * accelRoll;
         _pitch = alpha * (_pitch + pitchRate * dt) + (1.0f - alpha) * accelPitch;
+
+        // Limitazione di sicurezza fisica per prevenire runaway dell'integratore
+        if (_roll > 75.0f) _roll = 75.0f;
+        if (_roll < -75.0f) _roll = -75.0f;
+        if (_pitch > 55.0f) _pitch = 55.0f;
+        if (_pitch < -55.0f) _pitch = -55.0f;
 
         // Apply Tare Offset (Motorcycle body frame)
         float effectiveRoll = _roll - _tareRoll;
